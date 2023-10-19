@@ -13,10 +13,12 @@ class AutoLoader
     public static $changed = false;
 
     // directory prefixes [PrefixChar] => left part of path
-    public static $classesBaseDirArr = ['*' => '', '?' => ''];
+    public static $classesBaseDirArr = ['*' => '', '?' => '', ':' => ''];
     
     // if directory prefix not specified, try get class with this prefixes:
     public static $defaultPrefixArr = ['*'];
+    
+    public static $optionalObj = null;
 
     public static function init($classesBaseDirs, $classesArr)
     {
@@ -102,13 +104,16 @@ class AutoLoader
             } else {
                 $pathPrefixVariantsArr = self::$defaultPrefixArr;
             }
-            if ($firstChar === '?') {
+            if ('?' === $firstChar) {
                 // alias
                 $setAliasFrom = \strtr($filePathString, '/', '\\');
                 $filePathString = self::autoLoad(\strtr($filePathString, '/', '\\'), false);
-                if (!$filePathString) {
-                    return false;
-                }
+            } elseif (':' === $firstChar) {
+                // optional installer
+                $filePathString = self::$optionalObj ? self::$optionalObj->resolve($filePathString) : '';
+            }
+            if (!$filePathString) {
+                return false;
             }
             $lc2 = \substr($filePathString, -2);
             if ($lc2 === '/*') {
