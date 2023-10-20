@@ -39,13 +39,13 @@ class DynoImporter {
         $dynoStr .= \var_export($this->dynoArr, true) . ";\n";
         $chkDir = \dirname(DYNO_FILE);
         if (!\is_dir($chkDir)) {
-            if (\is_dir($vendorDir) && \dirname($chkDir, 2) === \dirname($vendorDir)) {
+            if (\is_dir($vendorDir) && (\dirname($chkDir, 2) === \dirname($vendorDir))) {
                 if (!\mkdir($chkDir, 0777, true)) {
                     throw new \Exception("Can't create sub-dir to save DYNO_FILE: $chrDir \n vendorDir=$vendorDir");                    
                 }
             }
             if (!\is_dir($chkDir)) {
-                throw new \Exception("Not found folder to storage DYNO_FILE=" . DYNO_FILE . "\n vendorDir=$vendorDir");
+                throw new \Exception("Not found folder to storage DYNO_FILE=" . DYNO_FILE . "\n vendorDir=$vendorDir \n dir=$chkDir");
             }
         }
         $wb = \file_put_contents(DYNO_FILE, $dynoStr);
