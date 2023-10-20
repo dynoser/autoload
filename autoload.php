@@ -14,7 +14,7 @@
         }
         $rootDir = \substr($rootDir, 0, $i);
     }
-    $rootDir    = \trim(strtr($rootDir, '\\', '/'), '/');
+    $rootDir    = \rtrim(strtr($rootDir, '\\', '/'), '/');
     $vendorDir  = \defined('VENDOR_DIR') ? \constant('VENDOR_DIR')  : $rootDir . '/vendor';
     $classesDir = \defined('CLASSES_DIR')? \constant('CLASSES_DIR') : $rootDir . '/includes/classes';
     $extDir     = \defined('EXT_FS_DIR') ? \constant('EXT_FS_DIR')  : $rootDir . '/ext';
