@@ -83,21 +83,21 @@ class DynoImporter {
         return $foldersArr;
     }
  
-    public static function getAllVendorComposerJsonFilesArr(string $vendorDir): ?array {
-        $pkgJSONfilesArr = [];
-        $vendorsArr = self::getFoldersArr($vendorDir, false);
-        if ($vendorsArr) {
-            foreach($vendorsArr as $currVendorName) {
-                $pkgDirArr = self::getFoldersArr($vendorDir . '/' . $currVendorName, false);
-                if ($pkgDirArr) {
-                    foreach($pkgDirArr as $currPkgDir) {
-                        $pkgComposerJSONFile = $vendorDir . '/' . $currVendorName . '/' . $currPkgDir . '/composer.json';
-                        $pkgJSONfilesArr[$currVendorName . '/' . $currPkgDir] = $pkgComposerJSONFile;
+    public static function getSubSubDirFilesArr(string $baseDir, string $fileMask = '/composer.json'): ?array {
+        $foundSubSubFilesArr = []; // [subDir/subSubDir] => FullFileName
+        $subDirArr = self::getFoldersArr($baseDir, false);
+        if ($subDirArr) {
+            foreach($subDirArr as $subDir) {
+                $subSubDirArr = self::getFoldersArr($baseDir . '/' . $subDir, false);
+                if ($subSubDirArr) {
+                    foreach($subSubDirArr as $subSubDir) {
+                        $FullFileName = $baseDir . '/' . $subDir . '/' . $subSubDir . $fileMask;
+                        $foundSubSubFilesArr[$subDir . '/' . $subSubDir] = $FullFileName;
                     }
                 }
             }
         }
-        return $pkgJSONfilesArr;
+        return $foundSubSubFilesArr;
     }
 
     public function convertComposersPSR4toDynoArr(string $vendorDir): ?array {
@@ -139,7 +139,7 @@ class DynoImporter {
         $dynoArr['dyno-requires'] = [];
 
         // get All vendor-composer.json files
-        $allVendorComposerJSONFilesArr = self::getAllVendorComposerJsonFilesArr($vendorDir);
+        $allVendorComposerJSONFilesArr = self::getSubSubDirFilesArr($vendorDir);
         // walk all vendor-composer.json files and remove [psr-4] if have [files]
         foreach($allVendorComposerJSONFilesArr as $pkgName => $composerFullFile) {
             if (!\is_file($composerFullFile)) {
@@ -217,7 +217,7 @@ class DynoImporter {
         return $this->dynoArrChanged;
     }
     
-    public function getAliases(): array {
+    public function getAliases($firstChar = '?'): array {
         $aliasesArr = []; // [aliasTO] => [classFROM]
         foreach($this->dynoArr as $nameSpace => $pathes) {
             if (\is_string($pathes)) {
@@ -225,7 +225,7 @@ class DynoImporter {
             }
             if (\is_array($pathes)) {
                 foreach($pathes as $path) {
-                    if (\is_string($path) && \substr($path, 0, 1) === '?') {
+                    if (\is_string($path) && \substr($path, 0, 1) === $firstChar) {
                         $aliasesArr[$nameSpace] = \substr($path, 1);
                         break;
                     }
