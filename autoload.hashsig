@@ -1,0 +1,5 @@
+hashsig: 27d6d624e6decc22c1737e714776ac97beb600d9f4cc03782f1d6c91756dd1cd ~ filescnt: 4 ~ hashalg: sha256 ~ signalg: ed25519 ~ pubkey: EkDohf20jN/9kXW/WL3ZXo245ggek9TiTWzzmBriMTU= ~ signature: kUN9Dnl4JAEVOH7aPze1oBKaA79BOEVAbvvgCZ5WtUpjW/+71+SiXAbOrhoO5UF/79yoPupV2gTKeTye2o4+Bg==
+autoload.php: c43701c81276a70be4b00298c60e571184279842b56d6a31c3ecc60e49f19b37 1248
+src/AutoLoader.php: 648695f927ebd581abe2ad4714dffd8bf6e278618ff9d8239e59cd27366a08cc 7668
+src/AutoLoadSetup.php: bbf534e6900385d6bcba785a1e40df40412f53727e12f2d8b62cd0bc0f34f188 2873
+src/DynoImporter.php: b41d35e84b95acc2383d6b3ea8504cc4f682e60d23f6a3a8d0129611bf7320cf 10092
