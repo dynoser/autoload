@@ -60,7 +60,11 @@ class AutoLoadSetup
 
     public static function updateFromComposer() {
         if (self::$dynoObj) {
-            return self::$dynoObj->updateFromComposer(self::$vendorDir);
+            try {
+                return self::$dynoObj->updateFromComposer(self::$vendorDir);
+            } catch (\Throwable $e) {
+                return false;
+            }
         }
     }
 }
