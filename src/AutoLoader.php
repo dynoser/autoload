@@ -58,7 +58,7 @@ class AutoLoader
 
         // Let's divide $classFullName to $nameSpaceDir and $classShortName
         // $nameSpaceDir is namespace with "/" dividers instead "\"
-        $i = strrpos($classFullName, '\\');
+        $i = \strrpos($classFullName, '\\');
         $classShortName = $i ? \substr($classFullName, $i + 1) : $classFullName;
         $nameSpaceDir = $i ? \substr(strtr($classFullName, '\\', '/'), 0, $i) : '';
 
@@ -95,6 +95,14 @@ class AutoLoader
             }
 
             $firstChar = \substr($filePathString, 0, 1);
+            if (':' === $firstChar) {
+                // optional installer
+                $filePathString = self::$optionalObj ? self::$optionalObj->resolve($filePathString, $classFullName, $nameSpaceKey) : '';
+                if ($filePathString) {
+                    self::$classesArr[$nameSpaceKey][$numKey] = $filePathString;
+                    $firstChar = \substr($filePathString, 0, 1);
+                }
+            }
             if (\array_key_exists($firstChar, self::$classesBaseDirArr)) {
                 $pathPrefixVariantsArr = [$firstChar];
                 $filePathString = \substr($filePathString, 1);
@@ -108,25 +116,24 @@ class AutoLoader
                 // alias
                 $setAliasFrom = \strtr($filePathString, '/', '\\');
                 $filePathString = self::autoLoad(\strtr($filePathString, '/', '\\'), false);
-            } elseif (':' === $firstChar) {
-                // optional installer
-                $filePathString = self::$optionalObj ? self::$optionalObj->resolve($filePathString) : '';
             }
             if (!$filePathString) {
                 return false;
             }
-            $lc2 = \substr($filePathString, -2);
-            if ($lc2 === '/*') {
-                $filePathString = \substr($filePathString, 0, -2) . $starPath . '/';
-            } elseif ($lc2 === '/@') {
-                $classFolder = empty($starPath) ? $classShortName : 'classes';
-                $filePathString = substr($filePathString, 0, -2) . $starPath . '/' . $classFolder . '/';
-            }
-            if (\substr($filePathString, -1) === '/') {
-                $filePathString .= $classShortName . '.php';
-            } elseif ('?' !== $firstChar) {
-                // Remove rule for one-specified-file
-                unset(self::$classesArr[$nameSpaceKey][$numKey]);
+            if (empty($setAliasFrom)) {
+                $lc2 = \substr($filePathString, -2);
+                if ($lc2 === '/*') {
+                    $filePathString = \substr($filePathString, 0, -2) . $starPath . '/';
+                } elseif ($lc2 === '/@') {
+                    $classFolder = empty($starPath) ? $classShortName : 'classes';
+                    $filePathString = substr($filePathString, 0, -2) . $starPath . '/' . $classFolder . '/';
+                }
+                if (\substr($filePathString, -1) === '/') {
+                    $filePathString .= $classShortName . '.php';
+                } else {
+                    // Remove rule for one-specified-file
+                    unset(self::$classesArr[$nameSpaceKey][$numKey]);
+                }
             }
 
             foreach($pathPrefixVariantsArr as $firstChar) {
