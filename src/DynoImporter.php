@@ -18,6 +18,72 @@ class DynoImporter {
                 $this->importComposersPSR4($vendorDir);
                 $this->saveDynoFile($vendorDir);
             }
+            
+            if (!\class_exists('dynoser\hashsig\HashSigBase')) {
+                $chkFile = __DIR__ . '/HashSigBase.php';
+                if (\is_file($chkFile)) {
+                    require_once $chkFile;
+                }
+            }
+            if (\class_exists('dynoser\hashsig\HashSigBase', false)) {
+                AutoLoader::$optionalObj = new class {
+                    public function resolve(string $filePathString, string $classFullName, string $nameSpaceKey): string {
+                        // "fromURL [optional parameters] replaceNameSpace checkFiles"
+                        $i = \strpos($filePathString, ' ');
+                        $j = \strrpos($filePathString, ' ');
+                        if (!($j > $i)) {
+                            return '';
+                        }
+                        $fromURL = \substr($filePathString, 1, $i - 1);
+                        if (!\filter_var($fromURL, \FILTER_VALIDATE_URL)) {
+                            return '';
+                        }
+                        $checkFilesStr = \substr($filePathString, $j + 1);
+
+                        $midStr = \trim(\substr($filePathString, $i, $j - $i));
+                        $midArr = \explode(' ', $midStr);
+
+                        $replaceNameSpaceDir = \array_pop($midArr);
+                        $lc2 = \substr($replaceNameSpaceDir, -2);
+                        $lc = \substr($lc2, -1);
+                        if ($lc === '*' || $lc === '@') {
+                            $replaceNameSpaceDir = \substr($replaceNameSpaceDir, 0, -1);
+                        }
+                        
+                        $fullTargetPath = AutoLoader::getPathPrefix($replaceNameSpaceDir);
+                        $fullTargetPath = \strtr($fullTargetPath, '\\', '/');
+                        if (!$fullTargetPath || \substr($fullTargetPath, -1) !== '/') {
+                            throw new \Exception("Incorrect target namespace-folder: '$replaceNameSpaceDir', must specified folder with prefix-char");
+                        }
+                        $lk = \strlen($nameSpaceKey);
+                        $addPath = \substr($classFullName, $lk, \strlen($classFullName) - $lk);
+                        $addPath = $addPath ? \strtr(\substr($addPath, 1), '\\', '/') : \basename($classFullName);
+                        $classFile = $fullTargetPath . $addPath . '.php';
+                        
+                        if (!\is_file($classFile)) {
+                            // File not found - try load
+                            if (!\is_dir($fullTargetPath) && !mkdir($fullTargetPath, 0777, true)) {
+                                throw new \Exception("Can't create target path for download package: $fullTargetPath , foor class=$classFullName");
+                            }
+                            $hashSigBaseObj = new \dynoser\hashsig\HashSigBase();
+                            $res = $hashSigBaseObj->getFilesByHashSig(
+                                $fromURL,
+                                $fullTargetPath,
+                                null,  //array $baseURLs
+                                false, //bool $doNotSaveFiles
+                                false  //bool $doNotOverWrite
+                            );
+                            if (empty($res['successArr']) || !empty($res['errorsArr'])) {
+                                throw new \Exception("Download problem for class $classFullName , package url=$fromURL");
+                            }
+                            if (!\in_array($classFile, $res['successArr'])) {
+                                throw new \Exception("Successful downloaded hashsig-package, but not found target class file: $classFile");
+                            }
+                        }
+                        return \strtr($replaceNameSpaceDir, '\\', '/') . '*';
+                    }
+                };
+            }            
         }
     }
     
@@ -45,6 +111,9 @@ class DynoImporter {
                 }
             }
             if (!\is_dir($chkDir)) {
+                if (!\is_dir($chkDir)) {
+                    return null;
+                }
                 throw new \Exception("Not found folder to storage DYNO_FILE=" . DYNO_FILE . "\n vendorDir=$vendorDir \n dir=$chkDir");
             }
         }
