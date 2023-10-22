@@ -36,6 +36,7 @@ class AutoLoadSetup
                 '&' => $rootDir,    // prefix '&' for rootDir
                 '~' => $classesDir, // prefix '~' for classes in includes/classes
                 '@' => $vendorDir,  // prefix '@' for classes in vendor (Composer)
+                '$' => $extDir,     // prefix '$' for classes in ext (modules)
             ];
         }
 
