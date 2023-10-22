@@ -77,7 +77,8 @@ class DynoImporter {
                         
                         $fullTargetPath = AutoLoader::getPathPrefix($replaceNameSpaceDir);
                         $fullTargetPath = \strtr($fullTargetPath, '\\', '/');
-                        if (\substr($fullTargetPath, -4) === '.php') {
+                        $oneFileMode = (\substr($fullTargetPath, -4) === '.php');
+                        if ($oneFileMode) {
                             $fullTargetPath = \dirname($fullTargetPath) . '/';
                         }
                         if (!$fullTargetPath || (\substr($fullTargetPath, -1) !== '/')) {
@@ -109,7 +110,7 @@ class DynoImporter {
                                 throw new \Exception("Successful downloaded hashsig-package, but not found target class file: $classFile");
                             }
                         }
-                        return \strtr($replaceNameSpaceDir, '\\', '/') . '*';
+                        return \strtr($replaceNameSpaceDir, '\\', '/') . ($oneFileMode ? '': '*');
                     }
                 };
             }            
