@@ -3,28 +3,50 @@ namespace dynoser\autoload;
 
 class DynoImporter {
     
+    public $dynoDir = '';
+    public $dynoNSmapFile = '';
+    public $dynoNSmapURL = '';
     public $dynoArr = []; // [namespace] => sourcepath (see $classesArr in AutoLoader)
     public $dynoArrChanged = false; // if the dynoArr differs from what is saved in the file
     
     public function __construct(string $vendorDir) {
         if (DYNO_FILE) {
-            if (\file_exists(DYNO_FILE)) {
-                $this->dynoArr = (require DYNO_FILE);
+            if (\defined('DYNO_NSMAP_URL')) {
+                $this->dynoNSmapURL = \constant('DYNO_NSMAP_URL');
             }
-            if ($this->dynoArr && \is_array($this->dynoArr)) {
-                AutoLoader::$classesArr = \array_merge(AutoLoader::$classesArr, $this->dynoArr);
-            } else {
-                $this->dynoArr = AutoLoader::$classesArr;
-                $this->importComposersPSR4($vendorDir);
-                $this->saveDynoFile($vendorDir);
-            }
-            
-            if (!\class_exists('dynoser\hashsig\HashSigBase')) {
+            if (!\class_exists('dynoser\hashsig\HashSigBase', false)) {
                 $chkFile = __DIR__ . '/HashSigBase.php';
                 if (\is_file($chkFile)) {
                     require_once $chkFile;
                 }
             }
+
+            if (\defined('DYNO_NSMAP_TIMEOUT')) {
+                $this->checkCreateDynoDir($vendorDir);
+                if (\is_file($this->dynoNSmapFile)) {
+                    $fileModificationTime = \filemtime($this->dynoNSmapFile);
+                    $fileAgeSec = \time() - $fileModificationTime;
+                    if ($fileAgeSec > \DYNO_NSMAP_TIMEOUT) {
+                        $this->tryUpdateNSMap($vendorDir, $fileModificationTime, \DYNO_NSMAP_TIMEOUT);
+                    }
+                }
+            }
+
+
+            if (\file_exists(DYNO_FILE)) {
+                $this->dynoArr = (require DYNO_FILE);
+            }
+
+            if ($this->dynoArr && \is_array($this->dynoArr)) {
+                AutoLoader::$classesArr = \array_merge(AutoLoader::$classesArr, $this->dynoArr);
+            } else {
+                $this->checkCreateDynoDir($vendorDir);
+                $this->dynoArr = AutoLoader::$classesArr;
+                $this->importComposersPSR4($vendorDir);
+                $this->applyNSMap($vendorDir);
+                $this->saveDynoFile(DYNO_FILE);
+            }
+
             if (\class_exists('dynoser\hashsig\HashSigBase', false)) {
                 AutoLoader::$optionalObj = new class {
                     public function resolve(string $filePathString, string $classFullName, string $nameSpaceKey): string {
@@ -87,6 +109,76 @@ class DynoImporter {
         }
     }
     
+    public function tryUpdateNSMap($vendorDir, $fileModificationTime, $nsmapTimeOut = 60) {
+        try {
+            $nsMapArr = $this->downLoadNSMap();
+            if ($nsMapArr) {
+                $this->saveNSMapFile($this->dynoNSmapFile, $nsMapArr);
+                $this->dynoArr = AutoLoader::$classesArr;
+                $this->updateFromComposer($vendorDir);
+                $this->dynoArr = \array_merge($this->dynoArr, $nsMapArr);
+                $this->saveDynoFile(DYNO_FILE);
+            }
+        } catch(\Throwable $e) {
+            $newMTime = \time() - $nsmapTimeOut + 30;
+            \touch($this->dynoNSmapFile, $newMTime);
+        }
+    }
+    
+    public function applyNSMap(string $vendorDir) {
+        $mapFile = $this->dynoNSmapFile;
+        if (\is_file($mapFile)) {
+            $nsMapArr = (require $mapFile);
+        }
+        if (empty($nsMapArr) || !\is_array($nsMapArr)) {
+            $nsMapArr = $this->downLoadNSMap();
+            $this->saveNSMapFile($mapFile, $nsMapArr);
+        }
+        $this->dynoArr += $nsMapArr;
+    }
+    
+    public function downLoadNSMap($nsMapURL = null) {
+        if (!$nsMapURL) {
+            $nsMapURL = $this->dynoNSmapURL;
+        }
+        if (!$nsMapURL || !\class_exists('dynoser\hashsig\HashSigBase', false)) {
+            return [];
+        }
+        $hashSigBaseObj = new \dynoser\hashsig\HashSigBase();
+        $res = $hashSigBaseObj->getFilesByHashSig(
+            $nsMapURL,
+            null,
+            null,  //array $baseURLs
+            true,  //bool $doNotSaveFiles
+            false  //bool $doNotOverWrite
+        );
+        if (empty($res['successArr'])) {
+            throw new \Exception("nsmap download problem from url=$nsMapURL, unsuccess results");
+        }
+        $nsMapArr = [];
+        foreach($res['successArr'] as $fileName => $fileDataStr) {
+            $i = \strrpos($fileName, '.nsmap');
+            if (false !== $i) {
+                $rows = \explode("\n", $fileDataStr);
+                foreach($rows as $st) {
+                    $i = \strpos($st, ':');
+                    if ($i) {
+                        $namespace = \trim(\substr($st, 0, $i));
+                        $nsPath = \trim(\substr($st, $i + 1));
+                        if (\substr($namespace, 0, 1) === '#' || \substr($namespace, 0, 2) === '//') {
+                            continue;
+                        }
+                        $nsMapArr[$namespace] = $nsPath;
+                    }
+                }
+            }
+        }
+        if (!$nsMapArr) {
+            throw new \Exception("nsmap downloaded not contain namespace-definitions, url=$nsMapURL");
+        }
+        return $nsMapArr;
+    }
+    
     public function updateFromComposer(string $vendorDir) {
         if (DYNO_FILE) {
             // reload last version of dynoFile
@@ -95,31 +187,43 @@ class DynoImporter {
                 $this->dynoArrChanged = false;
             }
             $changed = $this->importComposersPSR4($vendorDir);
-            $this->saveDynoFile($vendorDir);
+            $this->checkCreateDynoDir($vendorDir);
+            $this->saveDynoFile(DYNO_FILE);
         }
         return $this->dynoArrChanged;
     }
     
-    public function saveDynoFile(string $vendorDir) {
-        $dynoStr = '<' . "?php\n" . 'return ';
-        $dynoStr .= \var_export($this->dynoArr, true) . ";\n";
-        $chkDir = \dirname(DYNO_FILE);
-        if (!\is_dir($chkDir)) {
-            if (\is_dir($vendorDir) && (\dirname($chkDir, 2) === \dirname($vendorDir))) {
-                if (!\mkdir($chkDir, 0777, true)) {
+    public function checkCreateDynoDir(string $vendorDir): string {
+        if (!$this->dynoDir) {
+            $chkDir = \dirname(DYNO_FILE);
+            if (!\is_dir($chkDir)) {
+                if (\is_dir($vendorDir) && (\dirname($chkDir, 2) === \dirname($vendorDir)) && !\mkdir($chkDir, 0777, true)) {
                     throw new \Exception("Can't create sub-dir to save DYNO_FILE: $chrDir \n vendorDir=$vendorDir");                    
                 }
-            }
-            if (!\is_dir($chkDir)) {
                 if (!\is_dir($chkDir)) {
-                    return null;
+                    throw new \Exception("Not found folder to storage DYNO_FILE=" . DYNO_FILE . "\n vendorDir=$vendorDir \n dir=$chkDir");
                 }
-                throw new \Exception("Not found folder to storage DYNO_FILE=" . DYNO_FILE . "\n vendorDir=$vendorDir \n dir=$chkDir");
             }
+            $this->dynoDir = $chkDir;
+            $this->dynoNSmapFile = $chkDir . '/nsmap.php';
         }
-        $wb = \file_put_contents(DYNO_FILE, $dynoStr);
+        return $this->dynoDir;
+    }
+    
+    public function saveNSMapFile(string $nsMapFile, array $nsMapArr) {
+        $dynoStr = '<' . "?php\n" . 'return ';
+        $dynoStr .= \var_export($nsMapArr, true) . ";\n";
+        $wb = \file_put_contents($nsMapFile, $dynoStr);
         if (!$wb) {
-            throw new \Exception("Can't write dyno-file (psr4-namespaces imported from composer)\nFile: " . DYNO_FILE);
+            throw new \Exception("Can't write nsMap-file (downloaded namespaces)\nFile: " . $nsMapFile);
+        }
+    }
+    public function saveDynoFile(string $dynoFile) {
+        $dynoStr = '<' . "?php\n" . 'return ';
+        $dynoStr .= \var_export($this->dynoArr, true) . ";\n";
+        $wb = \file_put_contents($dynoFile, $dynoStr);
+        if (!$wb) {
+            throw new \Exception("Can't write dyno-file (psr4-namespaces imported from composer)\nFile: " . $dynoFile);
         }
         $this->dynoArrChanged = false;
     }
