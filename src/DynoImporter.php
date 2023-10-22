@@ -23,12 +23,15 @@ class DynoImporter {
 
             if (\defined('DYNO_NSMAP_TIMEOUT')) {
                 $this->checkCreateDynoDir($vendorDir);
-                if (\is_file($this->dynoNSmapFile)) {
-                    $fileModificationTime = \filemtime($this->dynoNSmapFile);
-                    $fileAgeSec = \time() - $fileModificationTime;
-                    if ($fileAgeSec > \DYNO_NSMAP_TIMEOUT) {
-                        $this->tryUpdateNSMap($vendorDir, $fileModificationTime, \DYNO_NSMAP_TIMEOUT);
+                $goodNSmap = \is_file($this->dynoNSmapFile);
+                if ($goodNSmap) {
+                    if (\time() - \filemtime($this->dynoNSmapFile) > \DYNO_NSMAP_TIMEOUT) {
+                        $goodNSmap = false;
+                        \touch($this->dynoNSmapFile, \time() - 30);    
                     }
+                }
+                if (!$goodNSmap) {        
+                    $this->tryUpdateNSMap($vendorDir, \DYNO_NSMAP_TIMEOUT);
                 }
             }
 
@@ -109,7 +112,7 @@ class DynoImporter {
         }
     }
     
-    public function tryUpdateNSMap($vendorDir, $fileModificationTime, $nsmapTimeOut = 60) {
+    public function tryUpdateNSMap($vendorDir, $nsmapTimeOut = 60) {
         try {
             $nsMapArr = $this->downLoadNSMap();
             if ($nsMapArr) {
