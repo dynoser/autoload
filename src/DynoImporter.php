@@ -87,7 +87,8 @@ class DynoImporter {
                         $lk = \strlen($nameSpaceKey);
                         $addPath = \substr($classFullName, $lk, \strlen($classFullName) - $lk);
                         $addPath = $addPath ? \strtr(\substr($addPath, 1), '\\', '/') : \basename($classFullName);
-                        $classFile = $fullTargetPath . $addPath . '.php';
+                        $pkgChkFile = $addPath . '.php';
+                        $classFile = $fullTargetPath . $pkgChkFile;
                         $checkFile = $fullTargetPath . $checkFilesStr;
                         
                         if (!\is_file($classFile) || !\is_file($checkFile)) {
@@ -106,7 +107,7 @@ class DynoImporter {
                             if (empty($res['successArr']) || !empty($res['errorsArr'])) {
                                 throw new \Exception("Download problem for class $classFullName , package url=$fromURL");
                             }
-                            if (!\in_array($classFile, $res['successArr'])) {
+                            if (!\in_array($pkgChkFile, $res['successArr'])) {
                                 throw new \Exception("Successful downloaded hashsig-package, but not found target class file: $classFile");
                             }
                         }
