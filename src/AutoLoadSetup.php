@@ -7,19 +7,21 @@ class AutoLoadSetup
     public static $vendorDir;
     public static $classesDir;
     public static $extDir;
+    public static $storageDir;
     
     public static $dynoObj = null;
     
     public static $composerAutoLoaderLoaded = false;
 
-    public function __construct($rootDir, $vendorDir = null, $classesDir = null, $extDir = null) {
+    public function __construct($rootDir, $vendorDir = null, $classesDir = null, $extDir = null, $storageDir = null) {
         self::$rootDir = $rootDir;
         $vendorDir  = self::$vendorDir  = $vendorDir  ? $vendorDir  : $rootDir . '/vendor';
         $classesDir = self::$classesDir = $classesDir ? $classesDir : $rootDir . '/includes/classes';
         $extDir     = self::$extDir     = $extDir     ? $extDir     : $rootDir . '/ext';
+        $storageDir = self::$storageDir = $storageDir ? $storageDir : $rootDir . '/storage';
 
         if (!\defined('DYNO_FILE')) {
-            \define('DYNO_FILE', $rootDir . '/storage/int/dynoload.php');
+            \define('DYNO_FILE', $storageDir . '/namespaces/dynoload.php');
         }
 
         if (\class_exists('dynoser\\autoload\\AutoLoader', false)) {
