@@ -69,13 +69,15 @@ class DynoImporter {
                         $midArr = \explode(' ', $midStr);
 
                         $replaceNameSpaceDir = \array_pop($midArr);
-                        $lc2 = \substr($replaceNameSpaceDir, -2);
-                        $lc = \substr($lc2, -1);
-                        if ($lc === '*' || $lc === '@') {
-                            $replaceNameSpaceDir = \substr($replaceNameSpaceDir, 0, -1);
+                        if ($midArr) {
+                            $targetUnpackDir = \array_pop($midArr);
+                        } else {
+                            $targetUnpackDir = $replaceNameSpaceDir;
                         }
-                        
-                        $fullTargetPath = AutoLoader::getPathPrefix($replaceNameSpaceDir);
+                        if (\substr($targetUnpackDir, -1) === '*') {
+                            $targetUnpackDir = \substr($targetUnpackDir, 0, -1);
+                        }
+                        $fullTargetPath = AutoLoader::getPathPrefix($targetUnpackDir);
                         $fullTargetPath = \strtr($fullTargetPath, '\\', '/');
                         $oneFileMode = (\substr($fullTargetPath, -4) === '.php');
                         if ($oneFileMode) {
@@ -88,10 +90,10 @@ class DynoImporter {
                         $addPath = \substr($classFullName, $lk, \strlen($classFullName) - $lk);
                         $addPath = $addPath ? \strtr(\substr($addPath, 1), '\\', '/') : \basename($classFullName);
                         $pkgChkFile = $addPath . '.php';
-                        $classFile = $fullTargetPath . $pkgChkFile;
+                        //$classFile = $fullTargetPath . $pkgChkFile;
                         $checkFile = $fullTargetPath . $checkFilesStr;
                         
-                        if (!\is_file($classFile) || !\is_file($checkFile)) {
+                        if (!\is_file($checkFile)) {
                             // File not found - try load
                             if (!\is_dir($fullTargetPath) && !mkdir($fullTargetPath, 0777, true)) {
                                 throw new \Exception("Can't create target path for download package: $fullTargetPath , foor class=$classFullName");
@@ -107,11 +109,11 @@ class DynoImporter {
                             if (empty($res['successArr']) || !empty($res['errorsArr'])) {
                                 throw new \Exception("Download problem for class $classFullName , package url=$fromURL");
                             }
-                            if (!\in_array($pkgChkFile, $res['successArr'])) {
+                            if (!\in_array($checkFile, $res['successArr'])) {
                                 throw new \Exception("Successful downloaded hashsig-package, but not found target class file: $classFile");
                             }
                         }
-                        return \strtr($replaceNameSpaceDir, '\\', '/') . ($oneFileMode ? '': '*');
+                        return \strtr($replaceNameSpaceDir, '\\', '/');
                     }
                 };
             }            
