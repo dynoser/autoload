@@ -77,7 +77,10 @@ class DynoImporter {
                         
                         $fullTargetPath = AutoLoader::getPathPrefix($replaceNameSpaceDir);
                         $fullTargetPath = \strtr($fullTargetPath, '\\', '/');
-                        if (!$fullTargetPath || (\substr($fullTargetPath, -1) !== '/' && \substr($fullTargetPath, -4) !== '.php')) {
+                        if (\substr($fullTargetPath, -4) === '.php') {
+                            $fullTargetPath = \dirname($fullTargetPath) . '/';
+                        }
+                        if (!$fullTargetPath || (\substr($fullTargetPath, -1) !== '/')) {
                             throw new \Exception("Incorrect target namespace-folder: '$replaceNameSpaceDir', must specified folder with prefix-char");
                         }
                         $lk = \strlen($nameSpaceKey);
