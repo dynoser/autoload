@@ -84,8 +84,9 @@ class DynoImporter {
                         $addPath = \substr($classFullName, $lk, \strlen($classFullName) - $lk);
                         $addPath = $addPath ? \strtr(\substr($addPath, 1), '\\', '/') : \basename($classFullName);
                         $classFile = $fullTargetPath . $addPath . '.php';
+                        $checkFile = $fullTargetPath . $checkFilesStr;
                         
-                        if (!\is_file($classFile)) {
+                        if (!\is_file($classFile) || !\is_file($checkFile)) {
                             // File not found - try load
                             if (!\is_dir($fullTargetPath) && !mkdir($fullTargetPath, 0777, true)) {
                                 throw new \Exception("Can't create target path for download package: $fullTargetPath , foor class=$classFullName");
