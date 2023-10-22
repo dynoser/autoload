@@ -17,6 +17,7 @@ class HashSigBase {
     public $ownSignerObj = null;
     public $ownPubKeyBin = null;
     
+    public array $lastPkgHeaderArr = [];
     public string $lastSuccessPubKeyBin = '';
     public $trustKeysObj = null;
 
@@ -148,6 +149,8 @@ class HashSigBase {
                 break;
             }
         }
+
+        $this->lastPkgHeaderArr = $tmpArr;
 
         $sumSt = \trim(\substr($hashSignedStr, $firstStrEndPos + 1));
         if (!$doNotVerifyHash) {
@@ -360,7 +363,7 @@ class HashSigBase {
         }
         
         $this->unlinkTempZipFile();
-
+        
         return \compact('successArr', 'errorsArr', 'errMsgArr');
     }
 }
