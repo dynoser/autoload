@@ -42,7 +42,15 @@ class AutoLoadSetup
 
         \spl_autoload_register(['\\dynoser\\autoload\\AutoLoader','autoLoadSpl'], true, true);
 
-        if (DYNO_FILE && \class_exists('dynoser\\autoload\\DynoImporter')) {
+        // quick-load class without autoloader (if possible)
+        if (DYNO_FILE && !\class_exists('dynoser\\autoload\\DynoLoader', false)) {
+            $chkFile = __DIR__. '/DynoLoader.php';
+            if (\is_file($chkFile)) {
+                include_once $chkFile;
+            }
+        }
+
+        if (DYNO_FILE && \class_exists('dynoser\\autoload\\DynoLoader')) {
             // check sodium polyfill
             if (!\function_exists('sodium_crypto_sign_verify_detached')) {
                 $chkFile = $vendorDir . '/paragonie/sodium_compat/autoload.php';
@@ -50,7 +58,11 @@ class AutoLoadSetup
                     require_once $chkFile;
                 }
             }
-            self::$dynoObj = new DynoImporter($vendorDir);
+            self::$dynoObj = new DynoLoader($vendorDir);
+//            $writeLogClass = '\\dynoser\\writelog\\WriteLog';
+//            if (\class_exists($writeLogClass)) {
+//                self::$dynoObj->writeLogObj = new $writeLogClass(self::$dynoObj->dynoDir, 'log');
+//            }
         }
     }
     
