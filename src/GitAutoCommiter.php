@@ -33,24 +33,14 @@ class GitAutoCommiter
             $needInitCommit = !\file_exists($chkGitPath);
             if ($needInitCommit) {
                 $repo = $this->gitObj->init($sitePath);
-                $currentBranch = '';
             } else {
                 $repo = $this->gitObj->open($sitePath);
-                try {
-                    $currentBranch = $repo->getCurrentBranchName();
-                } catch (\Throwable $e) {
-                    $currentBranch = '';
-                    echo $e->getMessage() . "\n";
-                }
             }
+            $repo->execute('checkout', '-b', $this->mainBranch);
+            // check current branch
+            $currentBranch = $repo->getCurrentBranchName();
             if ($currentBranch !== $this->mainBranch) {
-                $repo->execute('checkout', '-b', $this->mainBranch);
-            }
-            if (!$currentBranch) {
-                $currentBranch = $repo->getCurrentBranchName();
-                if ($currentBranch !== $this->mainBranch) {
-                    throw new \Exception("Error branch selecting, branch name: " . $this->mainBranch);
-                }
+                throw new \Exception("Error branch selecting, branch name: " . $this->mainBranch);
             }
             if ($needInitCommit) {
                 $repo->execute('add', '.');
