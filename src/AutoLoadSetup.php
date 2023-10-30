@@ -63,6 +63,17 @@ class AutoLoadSetup
 //            if (\class_exists($writeLogClass)) {
 //                self::$dynoObj->writeLogObj = new $writeLogClass(self::$dynoObj->dynoDir, 'log');
 //            }
+            if (\class_exists('CzProject\\GitPhp\\Git')) {
+                if (!\class_exists('dynoser\\autoload\\GitAutoCommmiter', false)) {
+                    $chkFile = __DIR__. '/GitAutoCommiter.php';
+                    if (\is_file($chkFile)) {
+                        include_once $chkFile;
+                    }
+                }
+                if (\class_exists('dynoser\\autoload\\GitAutoCommiter')) {
+                    AutoLoader::$commiterObj = new GitAutoCommiter($rootDir);
+                }
+            }
         }
     }
     
