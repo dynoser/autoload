@@ -241,6 +241,10 @@ class DynoLoader
             if (!\is_dir($fullTargetPath) && !mkdir($fullTargetPath, 0777, true)) {
                 throw new \Exception("Can't create target path for download package: $fullTargetPath , foor class=$classFullName");
             }
+            if (AutoLoader::$commiterObj) {
+                AutoLoader::$commiterObj->setRepository();
+            }
+
             $hashSigBaseObj = new \dynoser\hashsig\HashSigBase();
             $res = $hashSigBaseObj->getFilesByHashSig(
                 $fromURL,
@@ -255,11 +259,11 @@ class DynoLoader
             if (!\in_array($checkFile, $res['successArr'])) {
                 throw new \Exception("Successful downloaded hashsig-package, but not found target class file: $classFile");
             }
-            if (AutoLoader::$commiterObj) {
-                AutoLoader::$commiterObj->addFiles($res['successArr'], $nameSpaceKey, $replaceNameSpaceDir, $classFullName);
-            }
             if (isset($res['successArr']['nsmap.helml'])) {
                 $this->nsMapUp();
+            }
+            if (AutoLoader::$commiterObj) {
+                AutoLoader::$commiterObj->addFiles($res['successArr'], $nameSpaceKey, $replaceNameSpaceDir, $classFullName);
             }
         }
         return \strtr($replaceNameSpaceDir, '\\', '/');
