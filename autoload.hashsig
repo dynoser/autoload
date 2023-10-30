@@ -1,7 +1,8 @@
-hashsig: d268963cd8eb81a103c6a93d2b5714b5490333314242c7c78581657eb5f26492 ~ filescnt: 6 ~ hashalg: sha256 ~ signalg: ed25519 ~ pubkey: EkDohf20jN/9kXW/WL3ZXo245ggek9TiTWzzmBriMTU= ~ signature: Yb3LLf+u9UUZQ4UQBfQwilO8r4LVy1Jb8dVx+EJstiWf5L0mZ5EvgWZxFmJHZ1HnhWsXdBvMCWFZ1ZeckDK5Dg==
+hashsig: c5b929473e5f20d38d5263439cb890d8edf557c7b5a127911bd92b4e4897d8ad ~ filescnt: 7 ~ hashalg: sha256 ~ signalg: ed25519 ~ pubkey: EkDohf20jN/9kXW/WL3ZXo245ggek9TiTWzzmBriMTU= ~ signature: /Z+u6M1bHsuKZfvkBOTDyi5/jHd6ETS+uXvFeasVZ0NikoH3G/+MGdkQ3IEjMnBYuD32uu1+FsHpjphx279kCw==
 autoload.php: d7e7e3ad371597d4b5eaaa84d094b9098fce742e4ad32d39c71e3bccfa238717 1232
-src/AutoLoader.php: 247f6aeb50594845a7c72295d975137d322daa361f9d2562a67c86704ee3c267 8001
-src/AutoLoadSetup.php: 299ebcc265accb7d4b4c1ea6f0c68e89e6f8f97345ddf59b5aa937ec02f45a17 3021
-src/DynoImporter.php: bc3f62dab5fa3597af94397e37b02b4b24802be95a8919afc4fd8b6e7265aa53 18420
-src/DynoLoader.php: 136ba61436ce9ce2f6e7ad9d553b11c35621da0f075c6d8e0bc9e939893ed9e9 18420
-src/HashSigBase.php: ab03a20671f969cab1e705ba2e579c1007624b11b59317ec23d3361b785edfe4 13587
+src/AutoLoader.php: 247f6aeb50594845a7c72295d975137d322daa361f9d2562a67c86704ee3c267 8250
+src/AutoLoadSetup.php: 56e2954a2749bac8bab95a86277d864cdd646aa5dac552501a8fb03fbdb76cd7 4490
+src/DynoImporter.php: bc3f62dab5fa3597af94397e37b02b4b24802be95a8919afc4fd8b6e7265aa53 12934
+src/DynoLoader.php: 230e39b43d7551195469aa81f8a32446315b4a8961db920bf468eced05ca7ddd 11215
+src/GitAutoCommiter.php: 3feea69ab2e8dd7f7eccc3b972ea6ed163f7a7277d9e2ca66bc0314278c0150a 2433
+src/HashSigBase.php: ab03a20671f969cab1e705ba2e579c1007624b11b59317ec23d3361b785edfe4 17297
