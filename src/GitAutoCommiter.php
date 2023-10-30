@@ -30,17 +30,29 @@ class GitAutoCommiter
 
         try {
             $chkGitPath = $this->sitePath . '/.git';
-            if (!\file_exists($chkGitPath)) {
+            $needInitCommit = !\file_exists($chkGitPath);
+            if ($needInitCommit) {
                 $repo = $this->gitObj->init($sitePath);
                 $currentBranch = '';
             } else {
                 $repo = $this->gitObj->open($sitePath);
-                $currentBranch = $repo->getCurrentBranchName();
+                try {
+                    $currentBranch = $repo->getCurrentBranchName();
+                } catch (\Throwable $e) {
+                    $currentBranch = '';
+                    echo $e->getMessage() . "\n";
+                }
             }
             if ($currentBranch !== $this->mainBranch) {
                 $repo->execute('checkout', '-b', $this->mainBranch);
             }
             if (!$currentBranch) {
+                $currentBranch = $repo->getCurrentBranchName();
+                if ($currentBranch !== $this->mainBranch) {
+                    throw new \Exception("Error branch selecting, branch name: " . $this->mainBranch);
+                }
+            }
+            if ($needInitCommit) {
                 $repo->execute('add', '.');
                 $repo->commit('Initial commit');
             }
@@ -48,7 +60,9 @@ class GitAutoCommiter
             $repo = true;
             echo $e->getMessage() . "\n";
             if (\property_exists($e, 'runnerResult')) {
-                \print_r($e->getRunnerResult()->getErrorOutput());
+                if ($e = $e->getRunnerResult()) {
+                    \print_r($e->getErrorOutput());
+                }
             }
         }
         $this->repository = $repo;
