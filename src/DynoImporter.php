@@ -3,8 +3,10 @@ namespace dynoser\autoload;
 
 class DynoImporter extends DynoLoader
 {
-    public function rebuildDynoCache($vendorDir, $subTimeSecOnErr = 30) {
+    public function rebuildDynoCache($subTimeSecOnErr = 30) {
         try {
+            $this->checkCreateDynoDir($this->vendorDir);
+
             // get current nsmap
             $nsMapArr = $this->loadNSMapFile();
             // get current remote-nsmap url list
@@ -14,7 +16,7 @@ class DynoImporter extends DynoLoader
             }
 
             // load nsmap-s from local folders
-            $dlMapArr = $this->scanLoadNSMaps($vendorDir);
+            $dlMapArr = $this->scanLoadNSMaps($this->vendorDir);
             $nsMapArr = $dlMapArr['nsMapArr'];
             $specArrArr = $dlMapArr['specArrArr'];
             if (isset($specArrArr[self::REMOTE_NSMAP_KEY])) {
@@ -26,7 +28,7 @@ class DynoImporter extends DynoLoader
             if ($dlMapArr) {
                 $nsMapArr += $dlMapArr['nsMapArr'];
                 $this->dynoArr = AutoLoader::$classesArr;
-                $this->updateFromComposer($vendorDir);
+                $this->updateFromComposer($this->vendorDir);
                 $this->dynoArr = \array_merge($this->dynoArr, $nsMapArr);
                 $this->saveDynoFile(DYNO_FILE);
                 $nsMapArr[self::REMOTE_NSMAP_KEY] = $remoteNSMapURLs;
