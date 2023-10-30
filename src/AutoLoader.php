@@ -100,7 +100,11 @@ class AutoLoader
                 // optional installer
                 $filePathString = self::$optionalObj ? self::$optionalObj->resolve($filePathString, $classFullName, $nameSpaceKey) : '';
                 if ($filePathString) {
-                    self::$classesArr[$nameSpaceKey][$numKey] = $filePathString;
+                    if (\is_string(self::$classesArr[$nameSpaceKey])) {
+                        self::$classesArr[$nameSpaceKey] = [$filePathString];
+                    } else {
+                        self::$classesArr[$nameSpaceKey][$numKey] = $filePathString;
+                    }
                     $firstChar = \substr($filePathString, 0, 1);
                 }
             }
