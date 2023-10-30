@@ -19,6 +19,7 @@ class AutoLoader
     public static $defaultPrefixArr = ['*'];
     
     public static $optionalObj = null;
+    public static $commiterObj = null;
 
     public static function init($classesBaseDirs, $classesArr)
     {
