@@ -1,193 +1,64 @@
 <?php
 namespace dynoser\autoload;
 
-class DynoImporter {
-    
-    public $dynoDir = '';
-    public $dynoNSmapFile = '';
-    public $dynoNSmapURL = '';
-    public $dynoArr = []; // [namespace] => sourcepath (see $classesArr in AutoLoader)
-    public $dynoArrChanged = false; // if the dynoArr differs from what is saved in the file
-    
-    public function __construct(string $vendorDir) {
-        if (DYNO_FILE) {
-            if (\defined('DYNO_NSMAP_URL')) {
-                $this->dynoNSmapURL = \constant('DYNO_NSMAP_URL');
-            }
-            if (!\class_exists('dynoser\hashsig\HashSigBase', false)) {
-                $chkFile = __DIR__ . '/HashSigBase.php';
-                if (\is_file($chkFile)) {
-                    require_once $chkFile;
-                }
-            }
-
-            if (\defined('DYNO_NSMAP_TIMEOUT')) {
-                $this->checkCreateDynoDir($vendorDir);
-                $goodNSmap = \is_file($this->dynoNSmapFile);
-                if ($goodNSmap) {
-                    if (\time() - \filemtime($this->dynoNSmapFile) > \DYNO_NSMAP_TIMEOUT) {
-                        $goodNSmap = false;
-                        \touch($this->dynoNSmapFile, \time() - 30);    
-                    }
-                }
-                if (!$goodNSmap) {        
-                    $this->tryUpdateNSMap($vendorDir, \DYNO_NSMAP_TIMEOUT);
-                }
-            }
-
-
-            if (\file_exists(DYNO_FILE)) {
-                $this->dynoArr = (require DYNO_FILE);
-            }
-
-            if ($this->dynoArr && \is_array($this->dynoArr)) {
-                AutoLoader::$classesArr = \array_merge(AutoLoader::$classesArr, $this->dynoArr);
-            } else {
-                $this->checkCreateDynoDir($vendorDir);
-                $this->dynoArr = AutoLoader::$classesArr;
-                $this->importComposersPSR4($vendorDir);
-                $this->applyNSMap($vendorDir);
-                $this->saveDynoFile(DYNO_FILE);
-            }
-
-            if (\class_exists('dynoser\hashsig\HashSigBase', false)) {
-                AutoLoader::$optionalObj = new class {
-                    public function resolve(string $filePathString, string $classFullName, string $nameSpaceKey): string {
-                        // "fromURL [optional parameters] replaceNameSpace checkFiles"
-                        $i = \strpos($filePathString, ' ');
-                        $j = \strrpos($filePathString, ' ');
-                        if (!($j > $i)) {
-                            return '';
-                        }
-                        $fromURL = \substr($filePathString, 1, $i - 1);
-                        if (!\filter_var($fromURL, \FILTER_VALIDATE_URL)) {
-                            return '';
-                        }
-                        $checkFilesStr = \substr($filePathString, $j + 1);
-
-                        $midStr = \trim(\substr($filePathString, $i, $j - $i));
-                        $midArr = \explode(' ', $midStr);
-
-                        $replaceNameSpaceDir = \array_pop($midArr);
-                        if ($midArr) {
-                            $targetUnpackDir = \array_pop($midArr);
-                        } else {
-                            $targetUnpackDir = $replaceNameSpaceDir;
-                        }
-                        if (\substr($targetUnpackDir, -1) === '*') {
-                            $targetUnpackDir = \substr($targetUnpackDir, 0, -1);
-                        }
-                        $fullTargetPath = AutoLoader::getPathPrefix($targetUnpackDir);
-                        $fullTargetPath = \strtr($fullTargetPath, '\\', '/');
-                        $oneFileMode = (\substr($fullTargetPath, -4) === '.php');
-                        if ($oneFileMode) {
-                            $fullTargetPath = \dirname($fullTargetPath) . '/';
-                        }
-                        if (!$fullTargetPath || (\substr($fullTargetPath, -1) !== '/')) {
-                            throw new \Exception("Incorrect target namespace-folder: '$replaceNameSpaceDir', must specified folder with prefix-char");
-                        }
-                        $lk = \strlen($nameSpaceKey);
-                        $addPath = \substr($classFullName, $lk, \strlen($classFullName) - $lk);
-                        $addPath = $addPath ? \strtr(\substr($addPath, 1), '\\', '/') : \basename($classFullName);
-                        $pkgChkFile = $addPath . '.php';
-                        //$classFile = $fullTargetPath . $pkgChkFile;
-                        $checkFile = $fullTargetPath . $checkFilesStr;
-                        
-                        if (!\is_file($checkFile)) {
-                            // File not found - try load
-                            if (!\is_dir($fullTargetPath) && !mkdir($fullTargetPath, 0777, true)) {
-                                throw new \Exception("Can't create target path for download package: $fullTargetPath , foor class=$classFullName");
-                            }
-                            $hashSigBaseObj = new \dynoser\hashsig\HashSigBase();
-                            $res = $hashSigBaseObj->getFilesByHashSig(
-                                $fromURL,
-                                $fullTargetPath,
-                                null,  //array $baseURLs
-                                false, //bool $doNotSaveFiles
-                                false  //bool $doNotOverWrite
-                            );
-                            if (empty($res['successArr']) || !empty($res['errorsArr'])) {
-                                throw new \Exception("Download problem for class $classFullName , package url=$fromURL");
-                            }
-                            if (!\in_array($checkFile, $res['successArr'])) {
-                                throw new \Exception("Successful downloaded hashsig-package, but not found target class file: $classFile");
-                            }
-                        }
-                        return \strtr($replaceNameSpaceDir, '\\', '/');
-                    }
-                };
-            }            
-        }
-    }
-    
-    public function tryUpdateNSMap($vendorDir, $nsmapTimeOut = 60) {
+class DynoImporter extends DynoLoader
+{
+    public function rebuildDynoCache($vendorDir, $subTimeSecOnErr = 30) {
         try {
-            $nsMapArr = $this->downLoadNSMap();
-            if ($nsMapArr) {
-                $this->saveNSMapFile($this->dynoNSmapFile, $nsMapArr);
+            // get current nsmap
+            $nsMapArr = $this->loadNSMapFile();
+            // get current remote-nsmap url list
+            $remoteNSMapURLs = \array_merge($this->dynoNSmapURLArr, $nsMapArr[self::REMOTE_NSMAP_KEY] ?? []);
+            if (\defined('DYNO_NSMAP_URL')) {
+                $remoteNSMapURLs[] = \constant('DYNO_NSMAP_URL');
+            }
+
+            // load nsmap-s from local folders
+            $dlMapArr = $this->scanLoadNSMaps($vendorDir);
+            $nsMapArr = $dlMapArr['nsMapArr'];
+            $specArrArr = $dlMapArr['specArrArr'];
+            if (isset($specArrArr[self::REMOTE_NSMAP_KEY])) {
+                $remoteNSMapURLs = \array_merge($remoteNSMapURLs, $specArrArr[self::REMOTE_NSMAP_KEY]);
+            }
+            $remoteNSMapURLs = \array_unique($remoteNSMapURLs);
+            
+            $dlMapArr = $this->downLoadNSMaps($remoteNSMapURLs);
+            if ($dlMapArr) {
+                $nsMapArr += $dlMapArr['nsMapArr'];
                 $this->dynoArr = AutoLoader::$classesArr;
                 $this->updateFromComposer($vendorDir);
                 $this->dynoArr = \array_merge($this->dynoArr, $nsMapArr);
                 $this->saveDynoFile(DYNO_FILE);
+                $nsMapArr[self::REMOTE_NSMAP_KEY] = $remoteNSMapURLs;
+                $this->saveNSMapFile($this->dynoNSmapFile, $nsMapArr);
             }
         } catch(\Throwable $e) {
-            $newMTime = \time() - $nsmapTimeOut + 30;
-            \touch($this->dynoNSmapFile, $newMTime);
+            $newMTime = \time() - $subTimeSecOnErr;
+            if (\is_file($this->dynoNSmapFile)) {
+                \touch($this->dynoNSmapFile, $newMTime);
+            }
         }
     }
-    
-    public function applyNSMap(string $vendorDir) {
-        $mapFile = $this->dynoNSmapFile;
-        if (\is_file($mapFile)) {
-            $nsMapArr = (require $mapFile);
-        }
-        if (empty($nsMapArr) || !\is_array($nsMapArr)) {
-            $nsMapArr = $this->downLoadNSMap();
-            $this->saveNSMapFile($mapFile, $nsMapArr);
-        }
-        $this->dynoArr += $nsMapArr;
-    }
-    
-    public function downLoadNSMap($nsMapURL = null) {
-        if (!$nsMapURL) {
-            $nsMapURL = $this->dynoNSmapURL;
-        }
-        if (!$nsMapURL || !\class_exists('dynoser\hashsig\HashSigBase', false)) {
-            return [];
-        }
-        $hashSigBaseObj = new \dynoser\hashsig\HashSigBase();
-        $res = $hashSigBaseObj->getFilesByHashSig(
-            $nsMapURL,
-            null,
-            null,  //array $baseURLs
-            true,  //bool $doNotSaveFiles
-            false  //bool $doNotOverWrite
-        );
-        if (empty($res['successArr'])) {
-            throw new \Exception("nsmap download problem from url=$nsMapURL, unsuccess results");
-        }
-        $nsMapArr = [];
-        foreach($res['successArr'] as $fileName => $fileDataStr) {
-            $i = \strrpos($fileName, '.nsmap');
-            if (false !== $i) {
-                $rows = \explode("\n", $fileDataStr);
-                foreach($rows as $st) {
-                    $i = \strpos($st, ':');
-                    if ($i) {
-                        $namespace = \trim(\substr($st, 0, $i));
-                        $nsPath = \trim(\substr($st, $i + 1));
-                        if (\substr($namespace, 0, 1) === '#' || \substr($namespace, 0, 2) === '//') {
-                            continue;
-                        }
-                        $nsMapArr[$namespace] = $nsPath;
-                    }
+        
+    public function scanLoadNSMaps(string $vendorDir): array {
+        $nsMapArr = [];   // [namespace] => path (like AutoLoader::$classes)
+        $specArrArr = []; // [spec-keys] => [array of strings]
+        // get All vendor-nsmap.helml files
+        $allNSMapFilesArr = self::getSubSubDirFilesArr($vendorDir, '/nsmap.helml', true, true);
+        // walk all vendor-nsmap.helml files and parse
+        foreach($allNSMapFilesArr as $pkgName => $nsMapFullFile) {
+            $fileDataStr = \file_get_contents($nsMapFullFile);
+            $addArr = self::parseNSMapHELMLStr($fileDataStr);
+            $nsMapArr += $addArr['nsMapArr'];
+            foreach($addArr['specArr'] as $specKey => $vStr) {
+                if (\array_key_exists($specKey, $specArrArr)) {
+                    $specArrArr[$specKey][] = $vStr;
+                } else {
+                    $specArrArr[$specKey] = [$vStr];
                 }
             }
         }
-        if (!$nsMapArr) {
-            throw new \Exception("nsmap downloaded not contain namespace-definitions, url=$nsMapURL");
-        }
-        return $nsMapArr;
+        return \compact('nsMapArr', 'specArrArr');
     }
     
     public function updateFromComposer(string $vendorDir) {
@@ -204,23 +75,15 @@ class DynoImporter {
         return $this->dynoArrChanged;
     }
     
-    public function checkCreateDynoDir(string $vendorDir): string {
-        if (!$this->dynoDir) {
-            $chkDir = \dirname(DYNO_FILE);
-            if (!\is_dir($chkDir)) {
-                if (\is_dir($vendorDir) && (\dirname($chkDir, 2) === \dirname($vendorDir)) && !\mkdir($chkDir, 0777, true)) {
-                    throw new \Exception("Can't create sub-dir to save DYNO_FILE: $chrDir \n vendorDir=$vendorDir");                    
-                }
-                if (!\is_dir($chkDir)) {
-                    throw new \Exception("Not found folder to storage DYNO_FILE=" . DYNO_FILE . "\n vendorDir=$vendorDir \n dir=$chkDir");
-                }
+    public function loadNSMapFile(): ?array {
+        if ($this->dynoNSmapFile && \is_file($this->dynoNSmapFile)) {
+            $nsMapArr = (require $this->dynoNSmapFile);
+            if (\is_array($nsMapArr)) {
+                return $nsMapArr;
             }
-            $this->dynoDir = $chkDir;
-            $this->dynoNSmapFile = $chkDir . '/nsmap.php';
         }
-        return $this->dynoDir;
+        return null;
     }
-    
     public function saveNSMapFile(string $nsMapFile, array $nsMapArr) {
         $dynoStr = '<' . "?php\n" . 'return ';
         $dynoStr .= \var_export($nsMapArr, true) . ";\n";
@@ -229,6 +92,7 @@ class DynoImporter {
             throw new \Exception("Can't write nsMap-file (downloaded namespaces)\nFile: " . $nsMapFile);
         }
     }
+
     public function saveDynoFile(string $dynoFile) {
         $dynoStr = '<' . "?php\n" . 'return ';
         $dynoStr .= \var_export($this->dynoArr, true) . ";\n";
@@ -238,6 +102,7 @@ class DynoImporter {
         }
         $this->dynoArrChanged = false;
     }
+
 
     public static function getFoldersArr(string $baseDir, $retFullPath = false): array {
         $foldersArr = [];
@@ -267,7 +132,7 @@ class DynoImporter {
         return $foldersArr;
     }
  
-    public static function getSubSubDirFilesArr(string $baseDir, string $fileMask = '/composer.json'): ?array {
+    public static function getSubSubDirFilesArr(string $baseDir, string $fileMask = '/composer.json', bool $ifExist = true, bool $addSubDir = false): ?array {
         $foundSubSubFilesArr = []; // [subDir/subSubDir] => FullFileName
         $subDirArr = self::getFoldersArr($baseDir, false);
         if ($subDirArr) {
@@ -276,9 +141,23 @@ class DynoImporter {
                 if ($subSubDirArr) {
                     foreach($subSubDirArr as $subSubDir) {
                         $FullFileName = $baseDir . '/' . $subDir . '/' . $subSubDir . $fileMask;
-                        $foundSubSubFilesArr[$subDir . '/' . $subSubDir] = $FullFileName;
+                        if (!$ifExist || \is_file($FullFileName)) {
+                            $foundSubSubFilesArr[$subDir . '/' . $subSubDir] = $FullFileName;
+                        }
                     }
                 }
+                if ($addSubDir) {
+                    $FullFileName = $baseDir . '/' . $subDir . $fileMask;
+                    if (!$ifExist || \is_file($FullFileName)) {
+                        $foundSubSubFilesArr[$subDir . '/'] = $FullFileName;
+                    }
+                }
+            }
+        }
+        if ($addSubDir) {
+            $FullFileName = $baseDir . $fileMask;
+            if (!$ifExist || \is_file($FullFileName)) {
+                $foundSubSubFilesArr['/'] = $FullFileName;
             }
         }
         return $foundSubSubFilesArr;
@@ -323,12 +202,9 @@ class DynoImporter {
         $dynoArr['dyno-requires'] = [];
 
         // get All vendor-composer.json files
-        $allVendorComposerJSONFilesArr = self::getSubSubDirFilesArr($vendorDir);
+        $allVendorComposerJSONFilesArr = self::getSubSubDirFilesArr($vendorDir, '/composer.json', true, false);
         // walk all vendor-composer.json files and remove [psr-4] if have [files]
         foreach($allVendorComposerJSONFilesArr as $pkgName => $composerFullFile) {
-            if (!\is_file($composerFullFile)) {
-                continue;
-            }
             $JsonDataStr = \file_get_contents($composerFullFile);
             if (!$JsonDataStr) {
                 continue;
