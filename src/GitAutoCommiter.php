@@ -29,13 +29,13 @@ class GitAutoCommiter
         $this->gitObj = new Git();
 
         try {
-            $chkGitPath = $this->sitePath . '/.git';
+            $chkGitPath    = $this->sitePath . '/.git';
+            $gitIgnoreFile = $this->sitePath . '/.gitignore';
             $needInitCommit = !\file_exists($chkGitPath);
             if ($needInitCommit) {
                 $repo = $this->gitObj->init($sitePath);
                 $repo->execute('checkout', '-b', $this->mainBranch);
                 // auto-create .gitignore if not exist
-                $gitIgnoreFile = $this->sitePath . '/.gitignore';
                 if (!\is_file($gitIgnoreFile)) {
                     \file_put_contents($gitIgnoreFile,
 <<<GITIGNORE
@@ -75,8 +75,10 @@ GITIGNORE
             }
             if ($needInitCommit) {
                 //$repo->addAllChanges();
+                $repo->addFile($gitIgnoreFile);
+                $repo->commit('init commit .gitignore only');
                 $repo->execute('add', '.');
-                $repo->commit('Initial commit');
+                $repo->commit('Initial commit of current state');
             }
             // check current branch
             $currentBranch = $repo->getCurrentBranchName();
