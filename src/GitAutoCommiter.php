@@ -39,7 +39,6 @@ class GitAutoCommiter
                 if (!\is_file($gitIgnoreFile)) {
                     \file_put_contents($gitIgnoreFile,
 <<<GITIGNORE
-.gitignore
 /storage/
 /nbproject/
 GITIGNORE
