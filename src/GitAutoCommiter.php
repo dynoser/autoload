@@ -57,7 +57,9 @@ GITIGNORE
                     $output = $repo->execute('config', 'user.name', "\"$gitUserName\"");
                     $output = $repo->execute('config', 'user.email', "\"$gitUserEmail\"");
                 }
-                
+                // remove CRLF warnings and check
+                $output = $repo->execute('config', 'core.autocrlf', 'input');                
+                $output = $repo->execute('config', 'core.safecrlf', 'false');
                 
             } else {
                 $repo = $this->gitObj->open($sitePath);
