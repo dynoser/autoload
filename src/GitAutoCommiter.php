@@ -74,8 +74,8 @@ GITIGNORE
                 }
             }
             if ($needInitCommit) {
-                $repo->addAllChanges();
-                //$repo->execute('add', '.');
+                //$repo->addAllChanges();
+                $repo->execute('add', '.');
                 $repo->commit('Initial commit');
             }
             // check current branch
