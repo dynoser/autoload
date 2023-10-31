@@ -55,7 +55,7 @@ GITIGNORE
                     // set git user.name and user.email if need
                     $gitUserName  = \defined('GIT_USER_NAME')  ? \constant('GIT_USER_NAME')  : 'autoloader';
                     $gitUserEmail = \defined('GIT_USER_EMAIL') ? \constant('GIT_USER_EMAIL') : 'auto@commit.com';
-                    $output = $repo->execute('config', 'user.name', "\"$gitUserEmail\"");
+                    $output = $repo->execute('config', 'user.name', "\"$gitUserName\"");
                     $output = $repo->execute('config', 'user.email', "\"$gitUserEmail\"");
                 }
                 
