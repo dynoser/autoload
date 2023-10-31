@@ -33,18 +33,41 @@ class GitAutoCommiter
             $needInitCommit = !\file_exists($chkGitPath);
             if ($needInitCommit) {
                 $repo = $this->gitObj->init($sitePath);
+                $repo->execute('checkout', '-b', $this->mainBranch);
+                // auto-create .gitignore if not exist
+                $gitIgnoreFile = $this->sitePath . '/.gitignore';
+                if (!\is_file($gitIgnoreFile)) {
+                    \file_put_contents($gitIgnoreFile,
+<<<GITIGNORE
+.gitignore
+/storage/
+/nbproject/
+GITIGNORE
+);
+                }
+                
             } else {
                 $repo = $this->gitObj->open($sitePath);
+                $branches = $repo->getBranches();            
+                if ($branches) {
+                    $currentBranch = $repo->getCurrentBranchName();
+                } else {
+                    $needInitCommit = true;
+                    $currentBranch = '';
+                }
+                if ($currentBranch !== $this->mainBranch) {
+                    $repo->execute('checkout', '-b', $this->mainBranch);
+                }
             }
-            $repo->execute('checkout', '-b', $this->mainBranch);
             if ($needInitCommit) {
-                $repo->execute('add', '.');
+                $repo->addAllChanges();
+                //$repo->execute('add', '.');
                 $repo->commit('Initial commit');
             }
             // check current branch
             $currentBranch = $repo->getCurrentBranchName();
             if ($currentBranch !== $this->mainBranch) {
-                throw new \Exception("Error branch selecting, branch name: " . $this->mainBranch);
+                throw new \Exception("Error branch selecting, got  branch name $currentBranch but expected: " . $this->mainBranch);
             }
         } catch (\Throwable $e) {
             $repo = true;
