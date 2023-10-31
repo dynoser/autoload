@@ -45,6 +45,20 @@ class GitAutoCommiter
 GITIGNORE
 );
                 }
+                // check default user
+                try {
+                    $userName = $repo->execute('config', 'user.name');
+                } catch (\Throwable $ex) {
+                    $userName = null;
+                }
+                if (!$userName) {
+                    // set git user.name and user.email if need
+                    $gitUserName  = \defined('GIT_USER_NAME')  ? \constant('GIT_USER_NAME')  : 'autoloader';
+                    $gitUserEmail = \defined('GIT_USER_EMAIL') ? \constant('GIT_USER_EMAIL') : 'auto@commit.com';
+                    $output = $repo->execute('config', 'user.name', "\"$gitUserEmail\"");
+                    $output = $repo->execute('config', 'user.email', "\"$gitUserEmail\"");
+                }
+                
                 
             } else {
                 $repo = $this->gitObj->open($sitePath);
