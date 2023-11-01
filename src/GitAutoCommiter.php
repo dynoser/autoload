@@ -71,7 +71,7 @@ GITIGNORE
                     $currentBranch = '';
                 }
                 if ($currentBranch !== $this->mainBranch) {
-                    $repo->execute('checkout', '-b', $this->mainBranch);
+                    $repo->execute('checkout', $this->mainBranch);
                 }
             }
             if ($needInitCommit) {
