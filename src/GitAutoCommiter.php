@@ -69,7 +69,7 @@ GITIGNORE
                 $branches = $repo->getBranches();            
                 if ($branches) {
                     if (!\in_array($this->siteWorkBranch, $branches)) {
-                        $repo->branchCreate($repo);
+                        $this->branchCreate($repo);
                     }
                     $currentBranch = $repo->getCurrentBranchName();
                 } else {
