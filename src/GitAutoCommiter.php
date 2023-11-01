@@ -8,7 +8,7 @@ class GitAutoCommiter
     private $repository;
     private $gitObj;
     private $sitePath;
-    public $mainBranch = 'main';
+    public $siteWorkBranch = 'sitework';
 
     public function __construct($sitePath)
     {
@@ -34,7 +34,7 @@ class GitAutoCommiter
             $needInitCommit = !\file_exists($chkGitPath);
             if ($needInitCommit) {
                 $repo = $this->gitObj->init($sitePath);
-                $repo->execute('checkout', '-b', $this->mainBranch);
+                $repo->execute('checkout', '-b', $this->siteWorkBranch);
                 // auto-create .gitignore if not exist
                 if (!\is_file($gitIgnoreFile)) {
                     \file_put_contents($gitIgnoreFile,
@@ -65,13 +65,16 @@ GITIGNORE
                 $repo = $this->gitObj->open($sitePath);
                 $branches = $repo->getBranches();            
                 if ($branches) {
+                    if (!\in_array($this->siteWorkBranch, $branches)) {
+                        $repo->execute('checkout', '-b', $this->siteWorkBranch);
+                    }
                     $currentBranch = $repo->getCurrentBranchName();
                 } else {
                     $needInitCommit = true;
                     $currentBranch = '';
                 }
-                if ($currentBranch !== $this->mainBranch) {
-                    $repo->execute('checkout', $this->mainBranch);
+                if ($currentBranch !== $this->siteWorkBranch) {
+                    $repo->execute('checkout', $this->siteWorkBranch);
                 }
             }
             if ($needInitCommit) {
@@ -83,8 +86,8 @@ GITIGNORE
             }
             // check current branch
             $currentBranch = $repo->getCurrentBranchName();
-            if ($currentBranch !== $this->mainBranch) {
-                throw new \Exception("Error branch selecting, got  branch name $currentBranch but expected: " . $this->mainBranch);
+            if ($currentBranch !== $this->siteWorkBranch) {
+                throw new \Exception("Error branch selecting, got  branch name $currentBranch but expected: " . $this->siteWorkBranch);
             }
         } catch (\Throwable $e) {
             $repo = true;
