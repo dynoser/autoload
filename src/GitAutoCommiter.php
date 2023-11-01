@@ -18,6 +18,26 @@ class GitAutoCommiter
         }
         $this->sitePath = \strtr($this->sitePath, '\\', '/');
     }
+
+    public function branchCreate($repo) {
+        $repo->execute('checkout', '-b', $this->siteWorkBranch);
+        // check default user
+        try {
+            $userName = $repo->execute('config', 'user.name');
+        } catch (\Throwable $ex) {
+            $userName = null;
+        }
+        if (!$userName) {
+            // set git user.name and user.email if need
+            $gitUserName  = \defined('GIT_USER_NAME')  ? \constant('GIT_USER_NAME')  : 'autoloader';
+            $gitUserEmail = \defined('GIT_USER_EMAIL') ? \constant('GIT_USER_EMAIL') : 'auto@commit.com';
+            $output = $repo->execute('config', 'user.name', "\"$gitUserName\"");
+            $output = $repo->execute('config', 'user.email', "\"$gitUserEmail\"");
+        }
+        // remove CRLF warnings and check
+        $output = $repo->execute('config', 'core.autocrlf', 'input');                
+        $output = $repo->execute('config', 'core.safecrlf', 'false');
+    }
     
     public function setRepository()
     {
@@ -33,8 +53,6 @@ class GitAutoCommiter
             $gitIgnoreFile = $this->sitePath . '/.gitignore';
             $needInitCommit = !\file_exists($chkGitPath);
             if ($needInitCommit) {
-                $repo = $this->gitObj->init($sitePath);
-                $repo->execute('checkout', '-b', $this->siteWorkBranch);
                 // auto-create .gitignore if not exist
                 if (!\is_file($gitIgnoreFile)) {
                     \file_put_contents($gitIgnoreFile,
@@ -44,29 +62,14 @@ class GitAutoCommiter
 GITIGNORE
 );
                 }
-                // check default user
-                try {
-                    $userName = $repo->execute('config', 'user.name');
-                } catch (\Throwable $ex) {
-                    $userName = null;
-                }
-                if (!$userName) {
-                    // set git user.name and user.email if need
-                    $gitUserName  = \defined('GIT_USER_NAME')  ? \constant('GIT_USER_NAME')  : 'autoloader';
-                    $gitUserEmail = \defined('GIT_USER_EMAIL') ? \constant('GIT_USER_EMAIL') : 'auto@commit.com';
-                    $output = $repo->execute('config', 'user.name', "\"$gitUserName\"");
-                    $output = $repo->execute('config', 'user.email', "\"$gitUserEmail\"");
-                }
-                // remove CRLF warnings and check
-                $output = $repo->execute('config', 'core.autocrlf', 'input');                
-                $output = $repo->execute('config', 'core.safecrlf', 'false');
-                
+                $repo = $this->gitObj->init($sitePath);
+                $this->branchCreate($repo);                
             } else {
                 $repo = $this->gitObj->open($sitePath);
                 $branches = $repo->getBranches();            
                 if ($branches) {
                     if (!\in_array($this->siteWorkBranch, $branches)) {
-                        $repo->execute('checkout', '-b', $this->siteWorkBranch);
+                        $repo->branchCreate($repo);
                     }
                     $currentBranch = $repo->getCurrentBranchName();
                 } else {
