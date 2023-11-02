@@ -113,6 +113,7 @@ class DynoLoader
     public function downLoadNSMaps(array $remoteNSMapURLs): array {
         $nsMapArr = [];
         $specArrArr = []; // [spec-keys] => [array of strings]
+        $errMapArr = [];
         foreach($remoteNSMapURLs as $nsMapURL) {
             try {
                 $dlMapArr = $this->downLoadNSMapFromURL($nsMapURL);// nsMapArr specArrArr
@@ -125,10 +126,10 @@ class DynoLoader
                     }
                 }
             } catch (\Throwable $e) {
-
+                $errMapArr[$nsMapURL] = $e->getMessage();
             }
         }
-        return \compact('nsMapArr', 'specArrArr');
+        return \compact('nsMapArr', 'specArrArr', 'errMapArr');
     }
 
     public function downLoadNSMapFromURL(string $nsMapURL): array {
