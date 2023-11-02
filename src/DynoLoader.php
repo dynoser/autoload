@@ -132,7 +132,7 @@ class DynoLoader
         return \compact('nsMapArr', 'specArrArr', 'errMapArr');
     }
 
-    public function downLoadNSMapFromURL(string $nsMapURL): array {
+    public function downLoadNSMapFromURL(string $nsMapURL, bool $getTargetMaps  = false): array {
         if (!\class_exists('dynoser\hashsig\HashSigBase', false)) {
             throw new \Exception("No HashSigBase classs for remote-nsmap loading");
         }
@@ -143,8 +143,9 @@ class DynoLoader
             null,
             true   //$doNotSaveFiles
         );
-        $nsMapArr = [];   // [namespace] => path (like AutoLoader::$classes)
-        $specArrArr = []; // [spec-keys] => [array of strings]
+        $nsMapArr = [];      // [namespace] => path (like AutoLoader::$classes)
+        $specArrArr = [];    // [spec-keys] => [array of strings]
+        $targetMapsArr = []; // [fileName] => fileDataStr
         if ($res['successArr']) {
             foreach($res['successArr'] as $fileName => $fileDataStr) {
                 if (false !== \strrpos($fileName, 'nsmap.helml')) {
@@ -157,12 +158,12 @@ class DynoLoader
                             $specArrArr[$specKey] = [$vStr];
                         }
                     }
+                } elseif ($getTargetMaps && (false !== \strpos($fileName, 'targetmap.helml'))) {
+                    $targetMapsArr[$fileName] = $fileDataStr;
                 }
             }
-//        } else {
-//            throw new \Exception("nsmap download problem from url=$nsMapURL, unsuccess results");
         }
-        return \compact('nsMapArr', 'specArrArr');
+        return \compact('nsMapArr', 'specArrArr', 'targetMapsArr');
     }
 
     public static function parseNSMapHELMLStr(string $DataStr): array {
