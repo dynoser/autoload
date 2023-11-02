@@ -59,20 +59,11 @@ class AutoLoadSetup
                 }
             }
             self::$dynoObj = new DynoLoader($vendorDir);
-//            $writeLogClass = '\\dynoser\\writelog\\WriteLog';
-//            if (\class_exists($writeLogClass)) {
-//                self::$dynoObj->writeLogObj = new $writeLogClass(self::$dynoObj->dynoDir, 'log');
-//            }
-            if (\class_exists('CzProject\\GitPhp\\Git')) {
-                if (!\class_exists('dynoser\\autoload\\GitAutoCommmiter', false)) {
-                    $chkFile = __DIR__. '/GitAutoCommiter.php';
-                    if (\is_file($chkFile)) {
-                        include_once $chkFile;
-                    }
-                }
-                if (\class_exists('dynoser\\autoload\\GitAutoCommiter')) {
-                    AutoLoader::$commiterObj = new GitAutoCommiter($rootDir);
-                }
+            if (\defined('DYNO_WRITELOG') && \class_exists('\\dynoser\\writelog\\WriteLog')) {
+                self::$dynoObj->writeLogObj = new \dynoser\writelog\WriteLog(self::$dynoObj->dynoDir, \constant('DYNO_WRITELOG'));
+            }
+            if (\defined('GIT_AUTO_BRANCH') && \class_exists('CzProject\\GitPhp\\Git') && \class_exists('dynoser\\autoload\\GitAutoCommiter')) {
+                AutoLoader::$commiterObj = new GitAutoCommiter($rootDir);
             }
         }
     }
