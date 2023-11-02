@@ -195,46 +195,62 @@ class DynoLoader
         return $this->dynoDir;
     }
     
-    public function resolve(string $filePathString, string $classFullName, string $nameSpaceKey): string {
-        // "fromURL [optional parameters] replaceNameSpace checkFiles"
+    public static function pasreNsMapStr(string $filePathString): ?array {
         $i = \strpos($filePathString, ' ');
         $j = \strrpos($filePathString, ' ');
         if (!($j > $i)) {
-            return '';
+            return null;
         }
         $fromURL = \substr($filePathString, 1, $i - 1);
         if (!\filter_var($fromURL, \FILTER_VALIDATE_URL)) {
-            return '';
+            return null;
         }
         $checkFilesStr = \substr($filePathString, $j + 1);
 
         $midStr = \trim(\substr($filePathString, $i, $j - $i));
         $midArr = \explode(' ', $midStr);
 
-        $replaceNameSpaceDir = \array_pop($midArr);
+        $replaceNameSpace = \array_pop($midArr);
         if ($midArr) {
             $targetUnpackDir = \array_pop($midArr);
         } else {
-            $targetUnpackDir = $replaceNameSpaceDir;
+            $targetUnpackDir = $replaceNameSpace;
         }
         if (\substr($targetUnpackDir, -1) === '*') {
             $targetUnpackDir = \substr($targetUnpackDir, 0, -1);
         }
-        $fullTargetPath = AutoLoader::getPathPrefix($targetUnpackDir);
+        return \compact(
+            'fromURL',
+            'targetUnpackDir',
+            'replaceNameSpace',
+            'checkFilesStr',
+            'midArr'
+        );
+    }
+    public function resolve(string $filePathString, string $classFullName, string $nameSpaceKey): string {
+        // "fromURL [optional parameters] replaceNameSpace checkFiles"
+        $unArr = self::pasreNsMapStr($filePathString);
+        if (!$unArr) {
+            return '';
+        }
+        $fullTargetPath = AutoLoader::getPathPrefix($unArr['targetUnpackDir']);
         $fullTargetPath = \strtr($fullTargetPath, '\\', '/');
         $oneFileMode = (\substr($fullTargetPath, -4) === '.php');
         if ($oneFileMode) {
             $fullTargetPath = \dirname($fullTargetPath) . '/';
         }
         if (!$fullTargetPath || (\substr($fullTargetPath, -1) !== '/')) {
-            throw new \Exception("Incorrect target namespace-folder: '$replaceNameSpaceDir', must specified folder with prefix-char");
+            throw new \Exception("Incorrect target namespace-folder: '$fullTargetPath', must specified folder with prefix-char");
         }
         $lk = \strlen($nameSpaceKey);
         $addPath = \substr($classFullName, $lk, \strlen($classFullName) - $lk);
         $addPath = $addPath ? \strtr(\substr($addPath, 1), '\\', '/') : \basename($classFullName);
         $pkgChkFile = $addPath . '.php';
+
+        $replaceNameSpace = \strtr($unArr['replaceNameSpace'], '\\', '/');
+
         //$classFile = $fullTargetPath . $pkgChkFile;
-        $checkFile = $fullTargetPath . $checkFilesStr;
+        $checkFile = $fullTargetPath . $unArr['checkFilesStr'];
 
         if (!\is_file($checkFile)) {
             // File not found - try load
@@ -245,6 +261,7 @@ class DynoLoader
                 AutoLoader::$commiterObj->setRepository();
             }
 
+            $fromURL = $unArr['fromURL'];
             $hashSigBaseObj = new \dynoser\hashsig\HashSigBase();
             $res = $hashSigBaseObj->getFilesByHashSig(
                 $fromURL,
@@ -263,9 +280,9 @@ class DynoLoader
                 $this->nsMapUp();
             }
             if (AutoLoader::$commiterObj) {
-                AutoLoader::$commiterObj->addFiles($res['successArr'], $nameSpaceKey, $replaceNameSpaceDir, $classFullName);
+                AutoLoader::$commiterObj->addFiles($res['successArr'], $nameSpaceKey, $replaceNameSpace, $classFullName);
             }
         }
-        return \strtr($replaceNameSpaceDir, '\\', '/');
+        return $replaceNameSpace;
     }
 }
