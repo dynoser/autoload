@@ -62,6 +62,17 @@ class DynoLoader
     }
     
     public function nsMapUp() {
+        $dynoImporterObj = $this->makeDynoImporterObj();
+        if (!$dynoImporterObj) {
+            throw new \Exception("Can't rebuild dyno-maps because not found DynoImporter class");
+        }
+        $dynoImporterObj->rebuildDynoCache();
+        $this->dynoArr = $dynoImporterObj->dynoArr;
+        AutoLoader::$classesArr = $this->dynoArr;
+        return $dynoImporterObj;
+    }
+    
+    public function makeDynoImporterObj() {
         if (!\class_exists('dynoser\\autoload\\DynoImporter', false)) {
             $chkFile = __DIR__ . '/DynoImporter.php';
             if (\is_file($chkFile)) {
@@ -69,16 +80,14 @@ class DynoLoader
             }
         }
         if (!\class_exists('dynoser\\autoload\\DynoImporter')) {
-            throw new \Exception("Can't rebuild dyno-maps because not found DynoImporter class");
+            return null;
         }
         $this->checkCreateDynoDir($this->vendorDir);
-        $dimObj = new DynoImporter('');
+        $dynoImporterObj = new DynoImporter('');
         foreach($this as $k => $v) {
-            $dimObj->$k = $v;
+            $dynoImporterObj->$k = $v;
         }
-        $dimObj->rebuildDynoCache();
-        $this->dynoArr = $dimObj->dynoArr;
-        AutoLoader::$classesArr = $this->dynoArr;        
+        return $dynoImporterObj;
     }
     
     public function quickPrepareDynoArr($vendorDir) {
