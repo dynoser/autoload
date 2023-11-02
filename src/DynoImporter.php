@@ -3,7 +3,7 @@ namespace dynoser\autoload;
 
 class DynoImporter extends DynoLoader
 {
-    public function rebuildDynoCache($subTimeSecOnErr = 30) {
+    public function rebuildDynoCache($subTimeSecOnErr = 30): ?array {
         try {
             $this->checkCreateDynoDir($this->vendorDir);
 
@@ -33,6 +33,7 @@ class DynoImporter extends DynoLoader
                 $this->saveDynoFile(DYNO_FILE);
                 $nsMapArr[self::REMOTE_NSMAP_KEY] = $remoteNSMapURLs;
                 $this->saveNSMapFile($this->dynoNSmapFile, $nsMapArr);
+                return $nsMapArr;
             }
         } catch(\Throwable $e) {
             $newMTime = \time() - $subTimeSecOnErr;
@@ -40,6 +41,7 @@ class DynoImporter extends DynoLoader
                 \touch($this->dynoNSmapFile, $newMTime);
             }
         }
+        return null;
     }
         
     public function scanLoadNSMaps(string $vendorDir): array {
