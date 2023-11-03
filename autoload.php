@@ -25,4 +25,23 @@
     }
 
     (new \dynoser\autoload\AutoLoadSetup($rootDir, $vendorDir, $classesDir, $extDir, $storageDir));
+    
+    // *** temporary updating code for debugging, will removed in next versions ***
+    $updRequest = $argv[1] ?? $_REQUEST['dynoupdate'] ?? '';
+    if ($updRequest && 'da8be698d805f74da997ac7ad381b5aaa76384c9e27f78ae5d5688be95e39d92' === \hash('sha256', $updRequest)) {
+        $updClass = '\\dynoser\\nsmupdate\\UpdateByNSMaps';
+        if (\class_exists($updClass)) {
+            echo "<pre>Try update all...";
+            $updObj = new $updClass(false, true);
+            $updObj->removeCache();
+            $changesArr = $updObj->lookForDifferences();
+            echo ($changesArr) ? "Differences: " . \print_r($changesArr, true) : "No difference";
+            echo "\n\nRun update ... ";
+            $updatedResultsArr = $updObj->update();
+            echo ($updatedResultsArr) ? "Update results: " . \print_r($updatedResultsArr, true) : "Empty update results";
+            die("\nFinished\n");
+        }
+    }
+    // *** end of temporary dbg code ***
+
 })($file ?? '');// $file is Composer value
