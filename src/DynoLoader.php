@@ -285,7 +285,7 @@ class DynoLoader
                 throw new \Exception("Download problem for class $classFullName , package url=$fromURL");
             }
             if (!\in_array($checkFile, $res['successArr'])) {
-                throw new \Exception("Successful downloaded hashsig-package, but not found target class file: $classFile");
+                throw new \Exception("Successful downloaded hashsig-package, but not found target class file: $classFullName");
             }
             if (isset($res['successArr']['nsmap.helml'])) {
                 $this->nsMapUp();
