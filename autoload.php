@@ -27,7 +27,7 @@
     (new \dynoser\autoload\AutoLoadSetup($rootDir, $vendorDir, $classesDir, $extDir, $storageDir));
     
     // *** temporary updating code for debugging, will removed in next versions ***
-    $updRequest = $argv[1] ?? $_REQUEST['dynoupdate'] ?? '';
+    $updRequest = $GLOBALS['argv'][1] ?? $_REQUEST['dynoupdate'] ?? '';
     if ($updRequest && 'da8be698d805f74da997ac7ad381b5aaa76384c9e27f78ae5d5688be95e39d92' === \hash('sha256', $updRequest)) {
         $updClass = '\\dynoser\\nsmupdate\\UpdateByNSMaps';
         if (\class_exists($updClass)) {
