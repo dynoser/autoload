@@ -245,7 +245,11 @@ class DynoLoader
             return '';
         }
         $fullTargetPath = AutoLoader::getPathPrefix($unArr['targetUnpackDir']);
+        if (!$fullTargetPath) {
+            return '';
+        }
         $fullTargetPath = \strtr($fullTargetPath, '\\', '/');
+
         $oneFileMode = (\substr($fullTargetPath, -4) === '.php');
         if ($oneFileMode) {
             $fullTargetPath = \dirname($fullTargetPath) . '/';
