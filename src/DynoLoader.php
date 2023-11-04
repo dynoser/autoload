@@ -13,6 +13,8 @@ class DynoLoader
 
     public const REMOTE_NSMAP_KEY = 'remote-nsmap';
     public string $vendorDir;
+    
+    public bool $forceDownloads = false;
 
     public function __construct(string $vendorDir) {
         if (! DYNO_FILE || !$vendorDir) {
@@ -267,7 +269,7 @@ class DynoLoader
         //$classFile = $fullTargetPath . $pkgChkFile;
         $checkFile = $fullTargetPath . $unArr['checkFilesStr'];
 
-        if (!\is_file($checkFile)) {
+        if (!\is_file($checkFile) || $this->forceDownloads) {
             // File not found - try load
             if (!\is_dir($fullTargetPath) && !mkdir($fullTargetPath, 0777, true)) {
                 throw new \Exception("Can't create target path for download package: $fullTargetPath , foor class=$classFullName");
