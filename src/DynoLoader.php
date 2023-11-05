@@ -1,6 +1,8 @@
 <?php
 namespace dynoser\autoload;
 
+use dynoser\HELML\HELMLmicro;
+
 class DynoLoader
 {
     public $dynoDir = '';
@@ -119,14 +121,8 @@ class DynoLoader
         foreach($remoteNSMapURLs as $nsMapURL) {
             try {
                 $dlMapArr = $this->downLoadNSMapFromURL($nsMapURL);// nsMapArr specArrArr
-                $nsMapArr += $dlMapArr['nsMapArr'];
-                foreach($dlMapArr['specArrArr'] as $specKey => $specArr) {
-                    if (\array_key_exists($specKey, $specArrArr)) {
-                        $specArrArr[$specKey] += $specArr;
-                    } else {
-                        $specArrArr[$specKey] = $specArr;
-                    }
-                }
+                $nsMapArr   += $dlMapArr['nsMapArr'];
+                $specArrArr += $dlMapArr['specArrArr'];
             } catch (\Throwable $e) {
                 $errMapArr[$nsMapURL] = $e->getMessage();
             }
@@ -169,21 +165,31 @@ class DynoLoader
     }
 
     public static function parseNSMapHELMLStr(string $DataStr): array {
-        $nsMapArr = [];
         $specArr = [];
-        $rows = \explode("\n", $DataStr);
-        foreach($rows as $st) {
-            $i = \strpos($st, ':');
-            if ($i) {
-                $namespace = \trim(\substr($st, 0, $i));
-                if (\substr($namespace, 0, 1) === '#' || \substr($namespace, 0, 2) === '//') {
-                    continue;
+        $nsMapArr = [];
+        if (\class_exists('dynoser\\HELML\\HELMLmicro', false)) {
+            $nsMapArr = HELMLmicro::decode($DataStr);
+            foreach($nsMapArr as $nameSpace => $v) {
+                if (false !== \strpos($nameSpace, '-')) {
+                    $specArr[$nameSpace] = $v;
+                    unset($nsMapArr[$nameSpace]);
                 }
-                $value = \trim(\substr($st, $i + 1));
-                if (\strpos($namespace, '-')) {
-                    $specArr[$namespace] = $value;
-                } else {
-                    $nsMapArr[$namespace] = $value;
+            }
+        } else {
+            $rows = \explode("\n", $DataStr);
+            foreach($rows as $st) {
+                $i = \strpos($st, ':');
+                if ($i) {
+                    $namespace = \trim(\substr($st, 0, $i));
+                    if (\substr($namespace, 0, 1) === '#' || \substr($namespace, 0, 2) === '//') {
+                        continue;
+                    }
+                    $value = \trim(\substr($st, $i + 1));
+                    if (\strpos($namespace, '-')) {
+                        $specArr[$namespace] = $value;
+                    } else {
+                        $nsMapArr[$namespace] = $value;
+                    }
                 }
             }
         }
