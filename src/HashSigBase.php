@@ -20,7 +20,7 @@ class HashSigBase {
     public array  $lastPkgHeaderArr = [];
     public string $lastSuccessPubKeyBin = '';
     public array  $hashSignedArr = [];
-    public string $hashSignerStr = '';
+    public string $hashSignedStr = '';
     public $trustKeysObj = null;
     public $writeLogObj = null;
 
@@ -109,7 +109,7 @@ class HashSigBase {
         }
         $signStr = \substr($hashSignedStr, 0 , $firstStrEndPos);
         $signArr = \explode('~', $signStr);
-        if (count($signArr) < 5) {
+        if (\count($signArr) < 5) {
             return null;
         }
         $tmpArr = [];
@@ -183,7 +183,7 @@ class HashSigBase {
                 }
             }
             if (!$isTrusted && $this->trustKeysObj) {
-                $isTrusted = $this->trustKeyObj->isTrust($keyPubBin);
+                $isTrusted = $this->trustKeysObj->isTrust($keyPubBin);
             }
             if (!$isTrusted) {
                 throw new \Exception("Public key \"$keyPubB64\" is not trusted");
@@ -209,9 +209,6 @@ class HashSigBase {
                 throw new \Exception("Invalid signature");
             }
             $this->lastSuccessPubKeyBin = $keyPubBin;
-//            if ($this->trustKeysObj && !$this->isTrusted($keyPubBin)) {
-//                throw new \Exception("Package signature is OK, but public key not trusted: " . $keyPubB64);
-//            }
         }
 
         $resultArr = [];
@@ -290,9 +287,9 @@ class HashSigBase {
         bool $zipOnlyMode = false,
         array $onlyTheseFilesArr = null
     ) {
-        // get $pkgTrustedKeys from URL (if specified by |pubkey|pubkey... 
+        // get $pkgTrustedKeys from URL (if specified by |pubkey|pubkey...)
         $palPos = \strpos($hashSigFileFull, '|');
-        // get $onlyTheseFilesArr from URL (if specified by #file#file2#file3...
+        // get $onlyTheseFilesArr from URL (if specified by #file#file2#file3...)
         $sharPos = \strpos($hashSigFileFull, '#', $palPos ? $palPos : 0);
         if ($sharPos) {
             if (!$onlyTheseFilesArr) {
@@ -365,7 +362,7 @@ class HashSigBase {
                     if (!\is_numeric($v)) {
                         throw new \Exception("Bad array format onlyTheseFilesArr: '$v'");
                     }
-                    if (false !== strpos($k, '?') || false !== strpos($k, '*')) {
+                    if (false !== \strpos($k, '?') || false !== \strpos($k, '*')) {
                         $masksArr[] = $k;
                         $v = [];
                     } else {
