@@ -3,17 +3,28 @@ namespace dynoser\autoload;
 
 class DynoImporter extends DynoLoader
 {
+    /**
+     * Get remote-nsmap urls from cache-nsmap-file + this->dynoNSmapURLarr + DYNO_NSMAP_URL
+     *
+     * @return array
+     */
+    public function getCachedRemoteNSMapURLs(): array {
+        // get current nsmap (only to get links to remote nsmap)
+         $nsMapArr = $this->loadNSMapFile();
+         // get current remote-nsmap url list
+         $remoteNSMapURLs = \array_merge($this->dynoNSmapURLArr, $nsMapArr[self::REMOTE_NSMAP_KEY] ?? []);
+         if (\defined('DYNO_NSMAP_URL')) {
+             $remoteNSMapURLs[] = \constant('DYNO_NSMAP_URL');
+         }
+         return $remoteNSMapURLs;
+    }
+    
     public function rebuildDynoCache($subTimeSecOnErr = 30): ?array {
         try {
             $this->checkCreateDynoDir($this->vendorDir);
 
-            // get current nsmap
-            $nsMapArr = $this->loadNSMapFile();
-            // get current remote-nsmap url list
-            $remoteNSMapURLs = \array_merge($this->dynoNSmapURLArr, $nsMapArr[self::REMOTE_NSMAP_KEY] ?? []);
-            if (\defined('DYNO_NSMAP_URL')) {
-                $remoteNSMapURLs[] = \constant('DYNO_NSMAP_URL');
-            }
+            // get remote-nsmap urls from cache-nsmap-file + this->dynoNSmapURLarr + DYNO_NSMAP_URL
+            $remoteNSMapURLs = $this->getCachedRemoteNSMapURLs();
 
             // load nsmap-s from local folders
             $dlMapArr = $this->scanLoadNSMaps($this->vendorDir);
