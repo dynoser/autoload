@@ -14,6 +14,7 @@ class AutoLoadSetup
     public static $composerAutoLoaderLoaded = false;
 
     public function __construct($rootDir, $vendorDir = null, $classesDir = null, $extDir = null, $storageDir = null) {
+        $myOwnDir   = \strtr(__DIR__, '\\', '/');
         self::$rootDir = $rootDir;
         $vendorDir  = self::$vendorDir  = $vendorDir  ? $vendorDir  : $rootDir . '/vendor';
         $classesDir = self::$classesDir = $classesDir ? $classesDir : $rootDir . '/includes/classes';
@@ -27,7 +28,7 @@ class AutoLoadSetup
         if (\class_exists('dynoser\\autoload\\AutoLoader', false)) {
             \spl_autoload_unregister(['\\dynoser\\autoload\\AutoLoader','autoLoadSpl']);
         } else {
-            require_once __DIR__ . '/AutoLoader.php';
+            require_once $myOwnDir . '/AutoLoader.php';
 
             AutoLoader::$classesBaseDirArr = [
                 // 1-char prefixes to specify the left part of the path
@@ -41,12 +42,19 @@ class AutoLoadSetup
         }
 
         \spl_autoload_register(['\\dynoser\\autoload\\AutoLoader','autoLoadSpl'], true, true);
-
+        
         // quick-load class without autoloader (if possible)
         if (DYNO_FILE && !\class_exists('dynoser\\autoload\\DynoLoader', false)) {
-            $chkFile = __DIR__. '/DynoLoader.php';
+            $chkFile = $myOwnDir . '/DynoLoader.php';
             if (\is_file($chkFile)) {
                 include_once $chkFile;
+            }
+            // check HELML
+            if (!\class_exists('dynoser\\HELML\\HELMLmicro', false)) {
+                $chkFile = $myOwnDir .'/HELMLmicro.php';
+                if (\is_file($chkFile)) {
+                    include_once $chkFile;
+                }
             }
         }
 
