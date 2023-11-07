@@ -108,6 +108,18 @@ class DynoImporter extends DynoLoader
         }
     }
 
+    public function resetRemoteNSMapURLs(array $remoteNSMapURLs): ?array {
+        if (!$this->dynoNSmapFile) {
+            throw new \Exception("dynoNSmapFile undefined");
+        }
+        $nsMapArr = $this->loadNSMapFile();
+        if (\is_array($nsMapArr)) {
+            $nsMapArr[self::REMOTE_NSMAP_KEY] = $remoteNSMapURLs;
+            $this->saveNSMapFile($this->dynoNSmapFile, $nsMapArr);
+        }
+        return $nsMapArr;
+    }
+
     public function saveDynoFile(string $dynoFile) {
         $dynoStr = '<' . "?php\n" . 'return ';
         $dynoStr .= \var_export($this->dynoArr, true) . ";\n";
