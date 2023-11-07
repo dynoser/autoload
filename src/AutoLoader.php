@@ -100,10 +100,15 @@ class AutoLoader
                 // optional installer
                 $filePathString = self::$optionalObj ? self::$optionalObj->resolve($filePathString, $classFullName, $nameSpaceKey) : '';
                 if ($filePathString) {
-                    if (\is_string(self::$classesArr[$nameSpaceKey])) {
-                        self::$classesArr[$nameSpaceKey] = [$filePathString];
+                    if (\substr($filePathString, -1) === '-') {
+                        unset(self::$classesArr[$nameSpaceKey]);
+                        $filePathString = \substr($filePathString, 0, -1);
                     } else {
-                        self::$classesArr[$nameSpaceKey][$numKey] = $filePathString;
+                        if (\is_string(self::$classesArr[$nameSpaceKey])) {
+                            self::$classesArr[$nameSpaceKey] = [$filePathString];
+                        } else {
+                            self::$classesArr[$nameSpaceKey][$numKey] = $filePathString;
+                        }
                     }
                     $firstChar = \substr($filePathString, 0, 1);
                 }
@@ -131,7 +136,7 @@ class AutoLoader
                     $filePathString = \substr($filePathString, 0, -2) . $starPath . '/';
                 } elseif ($lc2 === '/@') {
                     $classFolder = empty($starPath) ? $classShortName : 'classes';
-                    $filePathString = substr($filePathString, 0, -2) . $starPath . '/' . $classFolder . '/';
+                    $filePathString = \substr($filePathString, 0, -2) . $starPath . '/' . $classFolder . '/';
                 }
                 if (\substr($filePathString, -1) === '/') {
                     $filePathString .= $classShortName . '.php';
