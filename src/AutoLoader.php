@@ -152,14 +152,14 @@ class AutoLoader
                     return $fileFullName;
                 }
                 if (!\is_file($fileFullName)) {
-                    // *** temporary dump code for debugging, will removed ***
-                    $dumpNoFiles = $_REQUEST['dumpnofiles'] ?? '';
-                    if ($dumpNoFiles && 'da8be698d805f74da997ac7ad381b5aaa76384c9e27f78ae5d5688be95e39d92' === \hash('sha256', $dumpNoFiles)) {
-                        echo "<pre>";
-                        \print_r(\compact('classFullName', 'classShortName', 'nameSpaceKey', 'fileFullName', 'firstChar', 'lc2', 'filePathString', 'starPath'));
-                        echo "</pre>";
-                    }
-                    // *** end of temporary dump code ***
+                    // // *** temporary dump code for debugging, will removed ***
+                    // $dumpNoFiles = $_REQUEST['dumpnofiles'] ?? '';
+                    // if ($dumpNoFiles && 'da8be698d805f74da997ac7ad381b5aaa76384c9e27f78ae5d5688be95e39d92' === \hash('sha256', $dumpNoFiles)) {
+                    //     echo "<pre>";
+                    //     \print_r(\compact('classFullName', 'classShortName', 'nameSpaceKey', 'fileFullName', 'firstChar', 'lc2', 'filePathString', 'starPath'));
+                    //     echo "</pre>";
+                    // }
+                    // // *** end of temporary dump code ***
                     continue;
                 }
                 if (!$realyLoad) {
