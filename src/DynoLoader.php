@@ -14,6 +14,8 @@ class DynoLoader
     public $dynoArrChanged = false; // if the dynoArr differs from what is saved in the file
 
     public const REMOTE_NSMAP_KEY = 'remote-nsmap';
+    public const NO_REMOTE = 'no-remote';
+
     public string $vendorDir;
     
     public bool $forceDownloads = false;
@@ -24,17 +26,17 @@ class DynoLoader
         }
         $this->vendorDir = $vendorDir;
 
-        $needUpdateNSMap = !\file_exists(DYNO_FILE);
-        if (!$needUpdateNSMap) {
+        $needUpdateDynoFile = !\file_exists(DYNO_FILE);
+        if (!$needUpdateDynoFile) {
             $this->dynoArr = (require DYNO_FILE);
             if (\is_array($this->dynoArr)) {
                 AutoLoader::$classesArr = \array_merge(AutoLoader::$classesArr, $this->dynoArr);
             } else {
-                $needUpdateNSMap = true;
+                $needUpdateDynoFile = true;
             }
         }
-        
-        // check HELMLmicro
+
+        // check and load HELMLmicro
         if (!\class_exists('dynoser\\HELML\\HELMLmicro', false)) {
             $chkFile = __DIR__ .'/HELMLmicro.php';
             if (\is_file($chkFile)) {
@@ -46,34 +48,42 @@ class DynoLoader
                 }
             }
         }
+ 
+        if (empty(AutoLoader::$classesArr[self::NO_REMOTE])) {
+            // check and load HashSigBase
+            if (!\class_exists('dynoser\hashsig\HashSigBase', false)) {
+                $chkFile = __DIR__ . '/HashSigBase.php';
+                if (\is_file($chkFile)) {
+                    include_once $chkFile;
+                } else {
+                    $chkFile = $this->vendorDir . '/dynoser/hashsig/HashSigBase.php';
+                    if (\is_file($chkFile)) {
+                        include_once $chkFile;
+                    }
+                }
+            }
 
-        if (!$needUpdateNSMap && \defined('DYNO_NSMAP_TIMEOUT')) {
-            $this->checkCreateDynoDir($vendorDir); //calc $this->dynoNSmapFile
-            $needUpdateNSMap = !\is_file($this->dynoNSmapFile);
-            if (!$needUpdateNSMap && (\time() - \filemtime($this->dynoNSmapFile) > \DYNO_NSMAP_TIMEOUT)) {
-                $needUpdateNSMap = true;
-                \touch($this->dynoNSmapFile, \time() - \DYNO_NSMAP_TIMEOUT + 30);
+            if (!$needUpdateDynoFile && \defined('DYNO_NSMAP_TIMEOUT')) {
+                $this->checkCreateDynoDir($vendorDir); //calc $this->dynoNSmapFile
+                $needUpdateDynoFile = !\is_file($this->dynoNSmapFile);
+                if (!$needUpdateDynoFile && (\time() - \filemtime($this->dynoNSmapFile) > \DYNO_NSMAP_TIMEOUT)) {
+                    $needUpdateDynoFile = true;
+                    \touch($this->dynoNSmapFile, \time() - \DYNO_NSMAP_TIMEOUT + 30);
+                }
             }
-        }
-        
-        // setup remote-autoload
-        if (!\class_exists('dynoser\hashsig\HashSigBase', false)) {
-            $chkFile = __DIR__ . '/HashSigBase.php';
-            if (\is_file($chkFile)) {
-                include_once $chkFile;
+
+            if (\class_exists('dynoser\hashsig\HashSigBase', false)) {
+                // prepare nsmap for self-load (if need)
+                if ($needUpdateDynoFile && !isset($this->dynoArr['dynoser/walkdir'])) {
+                    $this->quickPrepareDynoArr($vendorDir);
+                }
+
+                AutoLoader::$optionalObj = $this;
             }
-        }
-        if (\class_exists('dynoser\hashsig\HashSigBase', false)) {
-            // prepare nsmap for self-load (if need)
-            if ($needUpdateNSMap && !isset($this->dynoArr['dynoser/walkdir'])) {
-                $this->quickPrepareDynoArr($vendorDir);
-            }
-            
-            AutoLoader::$optionalObj = $this;
         }
 
         // rebuild dyno-cached files if need
-        if ($needUpdateNSMap) {
+        if ($needUpdateDynoFile) {
             $this->nsMapUp();
         }
     }
