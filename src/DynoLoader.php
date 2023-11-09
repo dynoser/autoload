@@ -51,7 +51,7 @@ class DynoLoader
  
         if (empty(AutoLoader::$classesArr[self::NO_REMOTE])) {
             // check and load HashSigBase
-            if (!\class_exists('dynoser\hashsig\HashSigBase', false)) {
+            if (!\class_exists('dynoser\\hashsig\\HashSigBase', false)) {
                 $chkFile = __DIR__ . '/HashSigBase.php';
                 if (\is_file($chkFile)) {
                     include_once $chkFile;
@@ -72,7 +72,7 @@ class DynoLoader
                 }
             }
 
-            if (\class_exists('dynoser\hashsig\HashSigBase', false)) {
+            if (\class_exists('dynoser\\hashsig\\HashSigBase', false)) {
                 // prepare nsmap for self-load (if need)
                 if ($needUpdateDynoFile && !isset($this->dynoArr['dynoser/walkdir'])) {
                     $this->quickPrepareDynoArr($vendorDir);
@@ -154,7 +154,7 @@ class DynoLoader
     }
 
     public function downLoadNSMapFromURL(string $nsMapURL, bool $getTargetMaps  = false): array {
-        if (!\class_exists('dynoser\hashsig\HashSigBase', false)) {
+        if (!\class_exists('dynoser\\hashsig\\HashSigBase', false)) {
             throw new \Exception("No HashSigBase classs for remote-nsmap loading");
         }
         $hashSigBaseObj = new \dynoser\hashsig\HashSigBase();
@@ -223,7 +223,6 @@ class DynoLoader
         if (!$this->dynoDir) {
             $chkDir = \dirname(DYNO_FILE);
             if (!\is_dir($chkDir)) {
-                //if (\is_dir($vendorDir) && (\dirname($chkDir, 2) === \dirname($vendorDir)) && !\mkdir($chkDir, 0777, true)) {
                 if (\is_dir($vendorDir) && !\mkdir($chkDir, 0777, true)) {
                     throw new \Exception("Can't create sub-dir to save DYNO_FILE: $chrDir \n vendorDir=$vendorDir");                    
                 }
