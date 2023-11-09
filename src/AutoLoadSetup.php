@@ -22,7 +22,7 @@ class AutoLoadSetup
         $storageDir = self::$storageDir = $storageDir ? $storageDir : $rootDir . '/storage';
 
         if (!\defined('DYNO_FILE')) {
-            \define('DYNO_FILE', $storageDir . '/namespaces/dynoload.php');
+            \define('DYNO_FILE', $storageDir . '/namespaces/dynofile.php');
         }
 
         if (\class_exists('dynoser\\autoload\\AutoLoader', false)) {
@@ -49,13 +49,6 @@ class AutoLoadSetup
             if (\is_file($chkFile)) {
                 include_once $chkFile;
             }
-            // check HELML
-            if (!\class_exists('dynoser\\HELML\\HELMLmicro', false)) {
-                $chkFile = $myOwnDir .'/HELMLmicro.php';
-                if (\is_file($chkFile)) {
-                    include_once $chkFile;
-                }
-            }
         }
 
         if (DYNO_FILE && \class_exists('dynoser\\autoload\\DynoLoader')) {
@@ -73,27 +66,6 @@ class AutoLoadSetup
             if (\defined('GIT_AUTO_BRANCH') && \class_exists('CzProject\\GitPhp\\Git') && \class_exists('dynoser\\autoload\\GitAutoCommiter')) {
                 AutoLoader::$commiterObj = new GitAutoCommiter($rootDir);
             }
-            
-            // *** temporary updating code for debugging, will removed in next versions ***
-            $updRequest = $GLOBALS['argv'][1] ?? $_REQUEST['dynoupdate'] ?? '';
-            if ($updRequest && 'da8be698d805f74da997ac7ad381b5aaa76384c9e27f78ae5d5688be95e39d92' === \hash('sha256', $updRequest)) {
-                $updRun = $GLOBALS['argv'][2] ?? $_REQUEST['run'] ?? '';
-                self::$dynoObj->forceDownloads = true;
-                AutoLoader::$commiterObj = null;
-                $updClass = '\\dynoser\\nsmupdate\\UpdateByNSMaps';
-                if (($updRun === 'run') && \class_exists($updClass)) {
-                    echo "<pre>Try update all...";
-                    $updObj = new $updClass(false, true);
-                    $updObj->removeCache();
-                    $changesArr = $updObj->lookForDifferences();
-                    echo ($changesArr) ? "Differences: " . \print_r($changesArr, true) : "No difference";
-                    echo "\n\nRun update ... ";
-                    $updatedResultsArr = $updObj->update();
-                    echo ($updatedResultsArr) ? "Update results: " . \print_r($updatedResultsArr, true) : "Empty update results";
-                    die("\nFinished\n");
-                }
-            }
-            // *** end of temporary dbg code ***
         }
     }
     
