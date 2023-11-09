@@ -33,6 +33,19 @@ class DynoLoader
                 $needUpdateNSMap = true;
             }
         }
+        
+        // check HELMLmicro
+        if (!\class_exists('dynoser\\HELML\\HELMLmicro', false)) {
+            $chkFile = __DIR__ .'/HELMLmicro.php';
+            if (\is_file($chkFile)) {
+                include_once $chkFile;
+            } else {
+                $chkFile = $this->vendorDir . '/dynoser/helml/src/HELMLmicro.php';
+                if (\is_file($chkFile)) {
+                    include_once $chkFile;
+                }
+            }
+        }
 
         if (!$needUpdateNSMap && \defined('DYNO_NSMAP_TIMEOUT')) {
             $this->checkCreateDynoDir($vendorDir); //calc $this->dynoNSmapFile
