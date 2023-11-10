@@ -15,6 +15,7 @@ class DynoLoader
 
     public const REMOTE_NSMAP_KEY = 'remote-nsmap';
     public const NO_REMOTE = 'no-remote';
+    public bool $noRemote = false;
 
     public string $vendorDir;
     
@@ -80,6 +81,8 @@ class DynoLoader
 
                 AutoLoader::$optionalObj = $this;
             }
+        } else {
+            $this->noRemote = true;
         }
 
         // rebuild dyno-cached files if need
@@ -131,10 +134,9 @@ class DynoLoader
             }
         }
         $dlMapArr = $this->downLoadNSMaps(\array_unique($dynoNSmapURLArr));
-        if (!$dlMapArr['nsMapArr']) {
-            throw new \Exception("Can't download self-code from nsmap URLs:" . \print_r($this->dynoNSmapURLArr, true));
+        if (!empty($dlMapArr['nsMapArr'])) {
+            $this->dynoArr += $dlMapArr['nsMapArr'];
         }
-        $this->dynoArr += $dlMapArr['nsMapArr'];
     }
 
     public function downLoadNSMaps(array $remoteNSMapURLs): array {
