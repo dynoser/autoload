@@ -104,7 +104,7 @@ class DynoImporter extends DynoLoader
         $dynoStr .= \var_export($nsMapArr, true) . ";\n";
         $wb = \file_put_contents($nsMapFile, $dynoStr);
         if (!$wb) {
-            throw new \Exception("Can't write nsMap-file (downloaded namespaces)\nFile: " . $nsMapFile);
+            throw new \Exception("Can't write nsmap-file: " . $nsMapFile);
         }
     }
 
@@ -125,7 +125,7 @@ class DynoImporter extends DynoLoader
         $dynoStr .= \var_export($this->dynoArr, true) . ";\n";
         $wb = \file_put_contents($dynoFile, $dynoStr);
         if (!$wb) {
-            throw new \Exception("Can't write dyno-file (psr4-namespaces imported from composer)\nFile: " . $dynoFile);
+            throw new \Exception("Can't write dyno-file: " . $dynoFile);
         }
         $this->dynoArrChanged = false;
     }
