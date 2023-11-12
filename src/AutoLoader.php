@@ -20,6 +20,8 @@ class AutoLoader
     
     public static $optionalObj = null;
     public static $commiterObj = null;
+    public static $notFoundLog = null;
+    public static $successLog = null;
 
     public static function init($classesBaseDirs, $classesArr)
     {
@@ -126,11 +128,13 @@ class AutoLoader
                 // alias
                 $setAliasFrom = \strtr($filePathString, '/', '\\');
                 $filePathString = self::autoLoad(\strtr($filePathString, '/', '\\'), false);
+            } else {
+                $setAliasFrom = '';
             }
             if (!$filePathString) {
                 return false;
             }
-            if (empty($setAliasFrom)) {
+            if (!$setAliasFrom) {
                 $lc2 = \substr($filePathString, -2);
                 if ($lc2 === '/*') {
                     $filePathString = \substr($filePathString, 0, -2) . $starPath . '/';
@@ -152,21 +156,18 @@ class AutoLoader
                     return $fileFullName;
                 }
                 if (!\is_file($fileFullName)) {
-                    // // *** temporary dump code for debugging, will removed ***
-                    // $dumpNoFiles = $_REQUEST['dumpnofiles'] ?? '';
-                    // if ($dumpNoFiles && 'da8be698d805f74da997ac7ad381b5aaa76384c9e27f78ae5d5688be95e39d92' === \hash('sha256', $dumpNoFiles)) {
-                    //     echo "<pre>";
-                    //     \print_r(\compact('classFullName', 'classShortName', 'nameSpaceKey', 'fileFullName', 'firstChar', 'lc2', 'filePathString', 'starPath'));
-                    //     echo "</pre>";
-                    // }
-                    // // *** end of temporary dump code ***
+                    if (self::$notFoundLog) {
+                        self::$notFoundLog->writeLogArr(\compact('classFullName', 'classShortName', 'nameSpaceKey', 'fileFullName', 'firstChar', 'lc2', 'filePathString', 'starPath', 'setAliasFrom'));
+                    }
                     continue;
+                } elseif (self::$successLog) {
+                    self::$successLog->writeLogArr(\compact('classFullName', 'nameSpaceKey', 'fileFullName', 'setAliasFrom'));
                 }
                 if (!$realyLoad) {
                     return $fileFullName;
                 }
                 include_once $fileFullName;
-                if (!empty($setAliasFrom) && !\class_exists($classFullName, false) && \class_exists($setAliasFrom, false)) {
+                if ($setAliasFrom && !\class_exists($classFullName, false) && \class_exists($setAliasFrom, false)) {
                     \class_alias($setAliasFrom, $classFullName);
                 }
                 $returnStatus = true;
