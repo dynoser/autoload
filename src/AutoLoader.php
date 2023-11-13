@@ -173,6 +173,10 @@ class AutoLoader
                 $returnStatus = true;
                 break;
             }
+
+            if ($returnStatus && \class_exists($classFullName, false)) {
+                break;
+            }
         }
 
         return $returnStatus;
