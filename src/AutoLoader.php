@@ -137,7 +137,7 @@ class AutoLoader
             if (!$setAliasFrom) {
                 $lc2 = \substr($filePathString, -2);
                 if ($lc2 === '/*') {
-                    $filePathString = \substr($filePathString, 0, -2) . $starPath . '/';
+                    $filePathString = \substr($filePathString, 0, -1) . $starPath . (empty($starPath) ? '' : '/');
                 } elseif ($lc2 === '/@') {
                     $classFolder = empty($starPath) ? $classShortName : 'classes';
                     $filePathString = \substr($filePathString, 0, -2) . $starPath . '/' . $classFolder . '/';
