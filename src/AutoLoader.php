@@ -216,4 +216,16 @@ class AutoLoader
         }
         return true;
     }
+    
+    public static function classExists($classFullName, $canAutoLoad = true, $canAutoInstall = false, $realyLoad = true) {
+        $xClass = \strtr($classFullName, '/', '\\');
+        $result = \class_exists($xClass, false);
+        if (!$result) {
+            $storAutoIns = self::$autoInstall;
+            self::$autoInstall = $canAutoInstall;
+            $result = $realyLoad ? \class_exists($xClass, $canAutoLoad) : self::autoLoad($xClass, false);
+            self::$autoInstall = $storAutoIns;
+        }
+        return $result;
+    }
 }
