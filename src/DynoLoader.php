@@ -50,7 +50,7 @@ class DynoLoader
         }
  
         // set autoInstall by spec-nsmap-option
-        AutoLoader::$autoInstall = AutoLoader::$classesArr[self::AUTO_INSTALL] ?? true;
+        AutoLoader::$autoInstall = AutoLoader::$classesArr[self::AUTO_INSTALL] ?? AutoLoader::DEFAULT_AUTO_INSTALL;
 
         if (AutoLoader::$autoInstall) {
             // check and load HashSigBase
