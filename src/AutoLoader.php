@@ -18,8 +18,9 @@ class AutoLoader
     // if directory prefix not specified, try get class with this prefixes:
     public static $defaultPrefixArr = ['*'];
     
+    public const DEFAULT_AUTO_INSTALL = false;
+    public static $autoInstall = self::DEFAULT_AUTO_INSTALL;
     public static $optionalObj = null;
-    public static $autoInstall = true;
     
     public static $commiterObj = null;
     public static $notFoundLog = null;
