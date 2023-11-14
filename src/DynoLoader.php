@@ -14,7 +14,6 @@ class DynoLoader
     public $dynoArrChanged = false; // if the dynoArr differs from what is saved in the file
 
     public const REMOTE_NSMAP_KEY = 'remote-nsmap';
-    public const AUTO_INSTALL = 'auto-install';
 
     public string $vendorDir;
     
@@ -49,22 +48,20 @@ class DynoLoader
             }
         }
  
-        // set autoInstall by spec-nsmap-option
-        AutoLoader::$autoInstall = AutoLoader::$classesArr[self::AUTO_INSTALL] ?? AutoLoader::DEFAULT_AUTO_INSTALL;
-
-        if (AutoLoader::$autoInstall) {
-            // check and load HashSigBase
-            if (!\class_exists('dynoser\\hashsig\\HashSigBase', false)) {
-                $chkFile = __DIR__ . '/HashSigBase.php';
+        // check and load HashSigBase
+        if (!\class_exists('dynoser\\hashsig\\HashSigBase', false)) {
+            $chkFile = __DIR__ . '/HashSigBase.php';
+            if (\is_file($chkFile)) {
+                include_once $chkFile;
+            } else {
+                $chkFile = $this->vendorDir . '/dynoser/hashsig/HashSigBase.php';
                 if (\is_file($chkFile)) {
                     include_once $chkFile;
-                } else {
-                    $chkFile = $this->vendorDir . '/dynoser/hashsig/HashSigBase.php';
-                    if (\is_file($chkFile)) {
-                        include_once $chkFile;
-                    }
                 }
             }
+        }
+
+        if (AutoLoader::$autoInstall) {
 
             if (!$needUpdateDynoFile && \defined('DYNO_NSMAP_TIMEOUT')) {
                 $this->checkCreateDynoDir($vendorDir); //calc $this->dynoNSmapFile
