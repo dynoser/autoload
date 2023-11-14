@@ -19,6 +19,8 @@ class AutoLoader
     public static $defaultPrefixArr = ['*'];
     
     public static $optionalObj = null;
+    public static $autoInstall = true;
+    
     public static $commiterObj = null;
     public static $notFoundLog = null;
     public static $successLog = null;
