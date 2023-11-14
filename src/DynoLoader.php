@@ -14,8 +14,7 @@ class DynoLoader
     public $dynoArrChanged = false; // if the dynoArr differs from what is saved in the file
 
     public const REMOTE_NSMAP_KEY = 'remote-nsmap';
-    public const NO_REMOTE = 'no-remote';
-    public bool $noRemote = false;
+    public const AUTO_INSTALL = 'auto-install';
 
     public string $vendorDir;
     
@@ -50,7 +49,10 @@ class DynoLoader
             }
         }
  
-        if (empty(AutoLoader::$classesArr[self::NO_REMOTE])) {
+        // set autoInstall by spec-nsmap-option
+        AutoLoader::$autoInstall = AutoLoader::$classesArr[self::AUTO_INSTALL] ?? true;
+
+        if (AutoLoader::$autoInstall) {
             // check and load HashSigBase
             if (!\class_exists('dynoser\\hashsig\\HashSigBase', false)) {
                 $chkFile = __DIR__ . '/HashSigBase.php';
@@ -81,8 +83,6 @@ class DynoLoader
 
                 AutoLoader::$optionalObj = $this;
             }
-        } else {
-            $this->noRemote = true;
         }
 
         // rebuild dyno-cached files if need
@@ -299,8 +299,8 @@ class DynoLoader
         //$classFile = $fullTargetPath . $pkgChkFile;
         $checkFile = $fullTargetPath . $unArr['checkFilesStr'];
 
-        if (!\is_file($checkFile) || $this->forceDownloads) {
-            // File not found - try load
+        if ((!\is_file($checkFile) || $this->forceDownloads) && AutoLoad::$autoInstall) {
+            // File not found - try load and install
             if (!\is_dir($fullTargetPath) && !mkdir($fullTargetPath, 0777, true)) {
                 throw new \Exception("Can't create target path for download package: $fullTargetPath , foor class=$classFullName");
             }
