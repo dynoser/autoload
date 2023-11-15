@@ -1,6 +1,9 @@
 <?php
 namespace dynoser\autoload;
 
+use dynoser\autoload\AutoLoadSetup;
+use dynoser\autoload\AutoLoader;
+
 class DynoImporter extends DynoLoader
 {
     /**
@@ -35,24 +38,26 @@ class DynoImporter extends DynoLoader
             }
             $remoteNSMapURLs = \array_unique($remoteNSMapURLs);
             
-            $dlMapArr = $this->downLoadNSMaps($remoteNSMapURLs);
-            if ($dlMapArr) {
-                $nsMapArr += $dlMapArr['nsMapArr'];
-                $this->dynoArr = AutoLoader::$classesArr;
-                $this->updateFromComposer($this->vendorDir);
-                $this->dynoArr = \array_merge($this->dynoArr, $nsMapArr);
-                $this->saveDynoFile(DYNO_FILE);
-                $nsMapArr[self::REMOTE_NSMAP_KEY] = $remoteNSMapURLs;
-                $this->saveNSMapFile($this->dynoNSmapFile, $nsMapArr);
-                return $nsMapArr;
+            if (AutoLoader::$autoInstall) {
+                $dlMapArr = $this->downLoadNSMaps($remoteNSMapURLs);
+                if ($dlMapArr) {
+                    $nsMapArr += $dlMapArr['nsMapArr'];
+                }
             }
+            $this->dynoArr = AutoLoader::$classesArr;
+            $this->updateFromComposer($this->vendorDir);
+            $this->dynoArr = \array_merge($this->dynoArr, $nsMapArr);
+            $this->saveDynoFile(DYNO_FILE);
+            $nsMapArr[self::REMOTE_NSMAP_KEY] = $remoteNSMapURLs;
+            $this->saveNSMapFile($this->dynoNSmapFile, $nsMapArr);
         } catch(\Throwable $e) {
             $newMTime = \time() - $subTimeSecOnErr;
             if (\is_file($this->dynoNSmapFile)) {
                 \touch($this->dynoNSmapFile, $newMTime);
             }
+            $nsMapArr = null;
         }
-        return null;
+        return $nsMapArr;
     }
         
     public function scanLoadNSMaps(string $vendorDir): array {
@@ -122,6 +127,7 @@ class DynoImporter extends DynoLoader
 
     public function saveDynoFile(string $dynoFile) {
         $dynoStr = '<' . "?php\n" . 'return ';
+        $this->dynoArr[AutoLoadSetup::BASE_DIRS_KEY] = AutoLoader::$classesBaseDirArr;
         $dynoStr .= \var_export($this->dynoArr, true) . ";\n";
         $wb = \file_put_contents($dynoFile, $dynoStr);
         if (!$wb) {
