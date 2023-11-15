@@ -9,28 +9,37 @@ class AutoLoadSetup
     public static $extDir;
     public static $storageDir;
     
+    public static $dynoArr = [];
     public static $dynoObj = null;
+    
+    public const BASE_DIRS_KEY = 'base-dirs';
     
     public static $composerAutoLoaderLoaded = false;
 
     public function __construct($rootDir, $vendorDir = null, $classesDir = null, $extDir = null, $storageDir = null) {
         $myOwnDir   = \strtr(__DIR__, '\\', '/');
         self::$rootDir = $rootDir;
-        $vendorDir  = self::$vendorDir  = $vendorDir  ? $vendorDir  : $rootDir . '/vendor';
-        $classesDir = self::$classesDir = $classesDir ? $classesDir : $rootDir . '/includes/classes';
-        $extDir     = self::$extDir     = $extDir     ? $extDir     : $rootDir . '/ext';
-        $storageDir = self::$storageDir = $storageDir ? $storageDir : $rootDir . '/storage';
 
-        if (!\defined('DYNO_FILE')) {
+        if (\defined('DYNO_FILE')) {
+            $storageDir = \dirname(DYNO_FILE, 2);
+        } else {
+            $storageDir = self::$storageDir = $storageDir ? $storageDir : ($rootDir . '/storage');
             \define('DYNO_FILE', $storageDir . '/namespaces/dynofile.php');
         }
 
-        if (\class_exists('dynoser\\autoload\\AutoLoader', false)) {
-            \spl_autoload_unregister(['\\dynoser\\autoload\\AutoLoader','autoLoadSpl']);
-        } else {
-            require_once $myOwnDir . '/AutoLoader.php';
+        if (DYNO_FILE && \is_file(DYNO_FILE)) {
+            self::$dynoArr = (require DYNO_FILE);
+        }
+        if (!\is_array(self::$dynoArr)) {
+            self::$dynoArr = [];
+        }
 
-            AutoLoader::$classesBaseDirArr = [
+        $vendorDir  = self::$vendorDir  = $vendorDir  ? $vendorDir  : $rootDir . '/vendor';
+        $classesDir = self::$classesDir = $classesDir ? $classesDir : $rootDir . '/includes/classes';
+        $extDir     = self::$extDir     = $extDir     ? $extDir     : $rootDir . '/ext';
+
+        if (empty(self::$dynoArr[self::BASE_DIRS_KEY]['@'])) {
+            $baseDirsArr = [
                 // 1-char prefixes to specify the left part of the path
                 '*' => '',          // prefix '*' to specify an absolute path of class
                 '?' => '',          // prefix '?' for aliases
@@ -39,6 +48,26 @@ class AutoLoadSetup
                 '@' => $vendorDir,  // prefix '@' for classes in vendor (Composer)
                 '$' => $extDir,     // prefix '$' for classes in ext (modules)
             ];
+        } else {
+            $baseDirsArr = self::$dynoArr[self::BASE_DIRS_KEY];
+
+            $vendorDir = $baseDirsArr['@'] ?? $vendorDir;
+            $classesDir = $baseDirsArr['~'] ?? $classesDir;
+            $extDir = $baseDirsArr['$'] ?? $extDir;
+        }
+
+        if (\class_exists('dynoser\\autoload\\AutoLoader', false)) {
+            \spl_autoload_unregister(['\\dynoser\\autoload\\AutoLoader','autoLoadSpl']);
+        } else {
+            require_once $myOwnDir . '/AutoLoader.php';
+
+            if (\defined('DYNO_AUTO_INSTALL')) {
+                AutoLoader::$autoInstall = \constant('DYNO_AUTO_INSTALL') ? true : false;
+            } elseif (\array_key_exists('auto-install', self::$dynoArr)) {
+                AutoLoader::$autoInstall = self::$dynoArr['auto-install'] ? true : false;
+            }
+
+            AutoLoader::$classesBaseDirArr = $baseDirsArr;
         }
 
         \spl_autoload_register(['\\dynoser\\autoload\\AutoLoader','autoLoadSpl'], true, true);
