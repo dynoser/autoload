@@ -3,11 +3,11 @@ namespace dynoser\autoload;
 
 class AutoLoadSetup
 {
-    public static $rootDir;
+    public static $rootDir = null;
     public static $vendorDir;
     public static $classesDir;
     public static $extDir;
-    public static $storageDir;
+    public static $storageDir = null;
     
     public static $dynoArr = [];
     public static $dynoObj = null;
@@ -16,84 +16,102 @@ class AutoLoadSetup
     
     public static $composerAutoLoaderLoaded = false;
 
-    public function __construct($rootDir, $vendorDir = null, $classesDir = null, $extDir = null, $storageDir = null) {
+    public function __construct($rootDirSet = null, $vendorDir = null, $classesDir = null, $extDir = null, $storageDirSet = null) {
         $myOwnDir   = \strtr(__DIR__, '\\', '/');
-        self::$rootDir = $rootDir;
 
-        if (\defined('DYNO_FILE')) {
-            $storageDir = \dirname(DYNO_FILE, 2);
-        } else {
-            $storageDir = self::$storageDir = $storageDir ? $storageDir : ($rootDir . '/storage');
-            \define('DYNO_FILE', $storageDir . '/namespaces/dynofile.php');
+        // set rootDir
+        if ($rootDirSet) {
+            self::$rootDir = \strtr($rootDirSet, '\\', '/');
+        } elseif (!self::$rootDir) {
+            throw new \Exception('Undefined rootDir');
         }
+        $rootDir = self::$rootDir;
 
-        if (DYNO_FILE && \is_file(DYNO_FILE)) {
-            self::$dynoArr = (require DYNO_FILE);
+        // set storageDir and DYNO_FILE
+        if ($storageDirSet) {
+            self::$storageDir = \rtrim(\strtr($storageDirSet, '\\', '/'), '/ *');
+        } elseif (!self::$storageDir) {
+            self::$storageDir = \defined('DYNO_FILE') ? \strtr(\dirname(DYNO_FILE, 2), '\\', '/') : ($rootDir . '/storage');
         }
-        if (!\is_array(self::$dynoArr)) {
-            self::$dynoArr = [];
+        
+        // constant DYNO_FILE must be defined
+        if (!\defined('DYNO_FILE')) {
+              \define('DYNO_FILE', self::$storageDir . '/namespaces/dynofile.php');
         }
-
-        $vendorDir  = self::$vendorDir  = $vendorDir  ? $vendorDir  : $rootDir . '/vendor';
-        $classesDir = self::$classesDir = $classesDir ? $classesDir : $rootDir . '/includes/classes';
-        $extDir     = self::$extDir     = $extDir     ? $extDir     : $rootDir . '/ext';
-
-        if (empty(self::$dynoArr[self::BASE_DIRS_KEY]['@'])) {
-            $baseDirsArr = [
-                // 1-char prefixes to specify the left part of the path
-                '*' => '',          // prefix '*' to specify an absolute path of class
-                '?' => '',          // prefix '?' for aliases
-                '&' => $rootDir,    // prefix '&' for rootDir
-                '~' => $classesDir, // prefix '~' for classes in includes/classes
-                '@' => $vendorDir,  // prefix '@' for classes in vendor (Composer)
-                '$' => $extDir,     // prefix '$' for classes in ext (modules)
-            ];
-        } else {
-            $baseDirsArr = self::$dynoArr[self::BASE_DIRS_KEY];
-
-            $vendorDir = $baseDirsArr['@'] ?? $vendorDir;
-            $classesDir = $baseDirsArr['~'] ?? $classesDir;
-            $extDir = $baseDirsArr['$'] ?? $extDir;
-        }
-
+ 
         if (\class_exists('dynoser\\autoload\\AutoLoader', false)) {
             \spl_autoload_unregister(['\\dynoser\\autoload\\AutoLoader','autoLoadSpl']);
         } else {
             require_once $myOwnDir . '/AutoLoader.php';
+
+            if (DYNO_FILE && \is_file(DYNO_FILE)) {
+                self::$dynoArr = (require DYNO_FILE);
+            }
+            if (!\is_array(self::$dynoArr)) {
+                self::$dynoArr = [];
+            }
+
+            $vendorDir  = $vendorDir  ? $vendorDir  : $rootDir . '/vendor';
+            $classesDir = $classesDir ? $classesDir : $rootDir . '/includes/classes';
+            $extDir     = $extDir     ? $extDir     : $rootDir . '/ext';
+
+            if (empty(self::$dynoArr[self::BASE_DIRS_KEY]['@'])) {
+                AutoLoader::$classesBaseDirArr = [
+                    // 1-char prefixes to specify the left part of the path
+                    '*' => '',          // prefix '*' to specify an absolute path of class
+                    '?' => '',          // prefix '?' for aliases
+                    '&' => $rootDir,    // prefix '&' for rootDir
+                    '~' => $classesDir, // prefix '~' for classes in includes/classes
+                    '@' => $vendorDir,  // prefix '@' for classes in vendor (Composer)
+                    '$' => $extDir,     // prefix '$' for classes in ext (modules)
+                ];
+            } else {
+                AutoLoader::$classesBaseDirArr = $baseDirsArr = self::$dynoArr[self::BASE_DIRS_KEY];
+
+                $vendorDir = $baseDirsArr['@'] ?? $vendorDir;
+                $classesDir = $baseDirsArr['~'] ?? $classesDir;
+                $extDir = $baseDirsArr['$'] ?? $extDir;
+            }
+
+            self::$vendorDir  = $vendorDir;
+            self::$classesDir = $classesDir;
+            self::$extDir     = $extDir;
 
             if (\defined('DYNO_AUTO_INSTALL')) {
                 AutoLoader::$autoInstall = \constant('DYNO_AUTO_INSTALL') ? true : false;
             } elseif (\array_key_exists('auto-install', self::$dynoArr)) {
                 AutoLoader::$autoInstall = self::$dynoArr['auto-install'] ? true : false;
             }
-
-            AutoLoader::$classesBaseDirArr = $baseDirsArr;
         }
 
         \spl_autoload_register(['\\dynoser\\autoload\\AutoLoader','autoLoadSpl'], true, true);
         
-        // quick-load class without autoloader (if possible)
-        if (DYNO_FILE && !\class_exists('dynoser\\autoload\\DynoLoader', false)) {
-            $chkFile = $myOwnDir . '/DynoLoader.php';
-            if (\is_file($chkFile)) {
-                include_once $chkFile;
-            }
-        }
+        if (DYNO_FILE) {
 
-        if (DYNO_FILE && \class_exists('dynoser\\autoload\\DynoLoader')) {
-            // check sodium polyfill
-            if (!\function_exists('sodium_crypto_sign_verify_detached')) {
-                $chkFile = $vendorDir . '/paragonie/sodium_compat/autoload.php';
+            // quick-load DynoLoader class without autoloader (if possible)
+            if (!\class_exists('dynoser\\autoload\\DynoLoader', false)) {
+                $chkFile = $myOwnDir . '/DynoLoader.php';
                 if (\is_file($chkFile)) {
-                    require_once $chkFile;
+                    include_once $chkFile;
                 }
             }
-            self::$dynoObj = new DynoLoader($vendorDir);
-            if (\defined('DYNO_WRITELOG') && \class_exists('\\dynoser\\writelog\\WriteLog')) {
-                self::$dynoObj->writeLogObj = new \dynoser\writelog\WriteLog(self::$dynoObj->dynoDir, \constant('DYNO_WRITELOG'));
-            }
-            if (\defined('GIT_AUTO_BRANCH') && \class_exists('CzProject\\GitPhp\\Git') && \class_exists('dynoser\\autoload\\GitAutoCommiter')) {
-                AutoLoader::$commiterObj = new GitAutoCommiter($rootDir);
+
+            if (\class_exists('dynoser\\autoload\\DynoLoader')) {
+                // check sodium (required for HashSig)
+                if (!\function_exists('sodium_crypto_sign_verify_detached')) {
+                    // try sodium polyfill
+                    $chkFile = $vendorDir . '/paragonie/sodium_compat/autoload.php';
+                    if (\is_file($chkFile)) {
+                        require_once $chkFile;
+                    }
+                }
+                self::$dynoObj = new DynoLoader($vendorDir);
+                if (\defined('DYNO_WRITELOG') && \class_exists('\\dynoser\\writelog\\WriteLog')) {
+                    self::$dynoObj->writeLogObj = new \dynoser\writelog\WriteLog(self::$dynoObj->dynoDir, \constant('DYNO_WRITELOG'));
+                }
+                if (\defined('GIT_AUTO_BRANCH') && \class_exists('CzProject\\GitPhp\\Git') && \class_exists('dynoser\\autoload\\GitAutoCommiter')) {
+                    AutoLoader::$commiterObj = new GitAutoCommiter($rootDir);
+                }
             }
         }
     }
