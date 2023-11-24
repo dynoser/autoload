@@ -18,8 +18,7 @@ class AutoLoader
     // if directory prefix not specified, try get class with this prefixes:
     public static $defaultPrefixArr = ['*'];
     
-    public const DEFAULT_AUTO_INSTALL = false;
-    public static $autoInstall = self::DEFAULT_AUTO_INSTALL;
+    public static $enableRemoteInstall = true; // enabled by default
     public static $optionalObj = null;
     
     public static $commiterObj = null;
@@ -222,10 +221,10 @@ class AutoLoader
         $xClass = \strtr($classFullName, '/', '\\');
         $result = \class_exists($xClass, false);
         if (!$result) {
-            $storAutoIns = self::$autoInstall;
-            self::$autoInstall = $canAutoInstall;
+            $storAutoIns = self::$enableRemoteInstall;
+            self::$enableRemoteInstall = $canAutoInstall;
             $result = $realyLoad ? \class_exists($xClass, $canAutoLoad) : self::autoLoad($xClass, false);
-            self::$autoInstall = $storAutoIns;
+            self::$enableRemoteInstall = $storAutoIns;
         }
         return $result;
     }
