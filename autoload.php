@@ -3,16 +3,18 @@
     if (\defined('ROOT_DIR')) {
         $rootDir = ROOT_DIR;
     } else {
-        $rootDir = \strtr($file ? $file : \getcwd(), '\\', '/');
-        $i = \strpos($rootDir, '/vendor/');
-        if (!$i) {
-            $rootDir = \strtr(__FILE__, '\\', '/');
-            $i = \strpos($rootDir, '/vendor/');
+        $rootDir = $file ? \dirname($file) : \getcwd();
+        if (!\is_dir($rootDir . '/vendor')) {
+            $i = \strpos(\strtr($rootDir, '\\', '/'), '/vendor/');
             if (!$i) {
-                throw new \Exception("Can't auto-detect rootDir");
+                $rootDir = \strtr(__FILE__, '\\', '/');
+                $i = \strpos($rootDir, '/vendor/');
+                if (!$i) {
+                    throw new \Exception("Can't auto-detect rootDir");
+                }
             }
+            $rootDir = \substr($rootDir, 0, $i);
         }
-        $rootDir = \substr($rootDir, 0, $i);
     }
     $rootDir    = \rtrim(strtr($rootDir, '\\', '/'), '/');
     $vendorDir  = \defined('VENDOR_DIR') ? \constant('VENDOR_DIR')  : $rootDir . '/vendor';
