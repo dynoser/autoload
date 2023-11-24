@@ -1,81 +1,95 @@
 <?php
 namespace dynoser\autoload;
 
-use dynoser\HELML\HELMLmicro;
+use dynoser\autoload\AutoLoader;
+use dynoser\autoload\AutoLoadSetup;
+use dynoser\HELML\HELML;
 
 class DynoLoader
 {
-    public $dynoDir = '';
-    public $dynoNSmapFile = '';
-    public $dynoNSmapURLArr = [
+    public static $useHELMLforNSmap = true;
+    public static $vendorDir = '';
+    public static $dynoDir = ''; // AutoLoadSetup::$storageDir /namespaces
+    public static $dynoNSmapFile = ''; // dynoDir /nsmap
+    public static $dynoNSmapURLArr = [
         'https://raw.githubusercontent.com/dynoser/nsmap/main/nsmap.hashsig.zip|EkDohf20jN/9kXW/WL3ZXo245ggek9TiTWzzmBriMTU=',
         ];
-    public $dynoArr = []; // [namespace] => sourcepath (see $classesArr in AutoLoader)
-    public $dynoArrChanged = false; // if the dynoArr differs from what is saved in the file
 
     public const REMOTE_NSMAP_KEY = 'remote-nsmap';
+    public const REMOTE_NSMAP_USED = 'remote-nsmap-loaded';
 
-    public string $vendorDir;
-    
-    public bool $forceDownloads = false;
+    public static bool $forceDownloads = false;
 
     public function __construct(string $vendorDir) {
         if (! DYNO_FILE || !$vendorDir) {
             return;
         }
-        $this->vendorDir = $vendorDir;
+        self::$vendorDir = $vendorDir;
 
-        $needUpdateDynoFile = !\file_exists(DYNO_FILE);
+        $needUpdateDynoFile = empty(AutoLoadSetup::$dynoArr);
+
         if (!$needUpdateDynoFile) {
-            $this->dynoArr = (require DYNO_FILE);
-            if (\is_array($this->dynoArr)) {
-                AutoLoader::$classesArr = \array_merge(AutoLoader::$classesArr, $this->dynoArr);
+            if (\is_array(AutoLoadSetup::$dynoArr)) {
+                AutoLoader::$classesArr = \array_merge(AutoLoader::$classesArr, AutoLoadSetup::$dynoArr);
             } else {
                 $needUpdateDynoFile = true;
             }
         }
 
-        // check and load HELMLmicro
-        if (!\class_exists('dynoser\\HELML\\HELMLmicro', false)) {
-            $chkFile = __DIR__ .'/HELMLmicro.php';
+        // check and load HELML
+        $classHELML = 'dynoser\\HELML\\HELML';
+        if (!\class_exists($classHELML, false)) {
+            $chkFile = __DIR__ .'/HELML.php';
             if (\is_file($chkFile)) {
                 include_once $chkFile;
             } else {
-                $chkFile = $this->vendorDir . '/dynoser/helml/src/HELMLmicro.php';
+                $chkFile = self::$vendorDir . '/dynoser/helml/src/HELML.php';
                 if (\is_file($chkFile)) {
                     include_once $chkFile;
                 }
             }
         }
+
+        if (\class_exists($classHELML)) {
+            $aliasHELML = 'dynoser\\tools\\HELML';
+            if (!class_exists($aliasHELML, false)) {
+                \class_alias($classHELML, $aliasHELML, false);
+            }
  
-        // check and load HashSigBase
-        if (!\class_exists('dynoser\\hashsig\\HashSigBase', false)) {
-            $chkFile = __DIR__ . '/HashSigBase.php';
-            if (\is_file($chkFile)) {
-                include_once $chkFile;
-            } else {
-                $chkFile = $this->vendorDir . '/dynoser/hashsig/HashSigBase.php';
+            // check and load HashSigBase
+            $classHashSigBase = 'dynoser\\hashsig\\HashSigBase';
+            if (!\class_exists($classHashSigBase, false)) {
+                $chkFile = __DIR__ . '/HashSigBase.php';
                 if (\is_file($chkFile)) {
                     include_once $chkFile;
+                } else {
+                    $chkFile = self::$vendorDir . '/dynoser/hashsig/HashSigBase.php';
+                    if (\is_file($chkFile)) {
+                        include_once $chkFile;
+                    }
                 }
             }
+        }
+
+        if (!\class_exists($classHashSigBase)) {
+            AutoLoader::$autoInstall = false;
         }
 
         if (AutoLoader::$autoInstall) {
 
             if (!$needUpdateDynoFile && \defined('DYNO_NSMAP_TIMEOUT')) {
-                $this->checkCreateDynoDir($vendorDir); //calc $this->dynoNSmapFile
-                $needUpdateDynoFile = !\is_file($this->dynoNSmapFile);
-                if (!$needUpdateDynoFile && (\time() - \filemtime($this->dynoNSmapFile) > \DYNO_NSMAP_TIMEOUT)) {
+                self::checkCreateDynoDir($vendorDir);
+                $needUpdateDynoFile = !\is_file(self::$dynoNSmapFile);
+                if (!$needUpdateDynoFile && (\time() - \filemtime(self::$dynoNSmapFile) > \DYNO_NSMAP_TIMEOUT)) {
                     $needUpdateDynoFile = true;
-                    \touch($this->dynoNSmapFile, \time() - \DYNO_NSMAP_TIMEOUT + 30);
+                    \touch(self::$dynoNSmapFile, \time() - \DYNO_NSMAP_TIMEOUT + 30);
                 }
             }
 
-            if (\class_exists('dynoser\\hashsig\\HashSigBase', false)) {
+            if (\class_exists($classHashSigBase, false)) {
                 // prepare nsmap for self-load (if need)
-                if ($needUpdateDynoFile && !isset($this->dynoArr['dynoser/walkdir'])) {
-                    $this->quickPrepareDynoArr($vendorDir);
+                if ($needUpdateDynoFile && !isset(AutoLoadSetup::$dynoArr['dynoser/walkdir'])) {
+                    self::quickPrepareDynoArr($vendorDir);
                 }
 
                 AutoLoader::$optionalObj = $this;
@@ -94,8 +108,7 @@ class DynoLoader
             throw new \Exception("Can't rebuild dyno-maps because not found DynoImporter class");
         }
         $dynoImporterObj->rebuildDynoCache();
-        $this->dynoArr = $dynoImporterObj->dynoArr;
-        AutoLoader::$classesArr = $this->dynoArr;
+        AutoLoader::$classesArr = AutoLoadSetup::$dynoArr;
         return $dynoImporterObj;
     }
     
@@ -106,25 +119,27 @@ class DynoLoader
                 include_once $chkFile;
             }
         }
-        if (!\class_exists('dynoser\\autoload\\DynoImporter')) {
-            return null;
-        }
-        $this->checkCreateDynoDir($this->vendorDir);
-        $dynoImporterObj = new DynoImporter('');
-        foreach($this as $k => $v) {
-            $dynoImporterObj->$k = $v;
+        if (\class_exists('dynoser\\autoload\\DynoImporter')) {
+            $this->checkCreateDynoDir(self::$vendorDir);
+            $dynoImporterObj = new DynoImporter('');
+//        Uncomment to use non-static object-properties
+//        foreach($this as $k => $v) {
+//            $dynoImporterObj->$k = $v;
+//        }
+        } else {
+            $dynoImporterObj = null;
         }
         return $dynoImporterObj;
     }
     
     public function quickPrepareDynoArr($vendorDir) {
         $this->checkCreateDynoDir($vendorDir);
-        $dynoNSmapURLArr = $this->dynoNSmapURLArr;
-        $this->dynoArr = AutoLoader::$classesArr;
-        if (\is_file($this->dynoNSmapFile)) {
-            $dlMapArr = (require $this->dynoNSmapFile);
+        $dynoNSmapURLArr = self::$dynoNSmapURLArr;
+        $dynoArr = AutoLoader::$classesArr;
+        if (\is_file(self::$dynoNSmapFile)) {
+            $dlMapArr = (require self::$dynoNSmapFile);
             if (\is_array($dlMapArr)) {
-                $this->dynoArr += $dlMapArr;
+                $dynoArr += $dlMapArr;
                 if (isset($dlMapArr[self::REMOTE_NSMAP_KEY])) {
                     $dynoNSmapURLArr += $dlMapArr[self::REMOTE_NSMAP_KEY];
                 }
@@ -132,24 +147,27 @@ class DynoLoader
         }
         $dlMapArr = $this->downLoadNSMaps(\array_unique($dynoNSmapURLArr));
         if (!empty($dlMapArr['nsMapArr'])) {
-            $this->dynoArr += $dlMapArr['nsMapArr'];
+            $dynoArr += $dlMapArr['nsMapArr'];
         }
+        AutoLoadSetup::$dynoArr = $dynoArr;
     }
 
     public function downLoadNSMaps(array $remoteNSMapURLs): array {
         $nsMapArr = [];
-        $specArrArr = []; // [spec-keys] => [array of strings]
-        $errMapArr = [];
+        $specArrArr = [self::REMOTE_NSMAP_USED => []]; // [spec-keys] => [array of strings]
         foreach($remoteNSMapURLs as $nsMapURL) {
             try {
                 $dlMapArr = $this->downLoadNSMapFromURL($nsMapURL);// nsMapArr specArrArr
                 $nsMapArr   += $dlMapArr['nsMapArr'];
                 $specArrArr += $dlMapArr['specArrArr'];
+                $ref = 'Ns: ' . \count($dlMapArr['nsMapArr']) . ', Spec: ' . \count($dlMapArr['specArrArr']);
             } catch (\Throwable $e) {
-                $errMapArr[$nsMapURL] = $e->getMessage();
+                $err = $e->getMessage();
+                $ref = 'ERROR: '. $err;
             }
+            $specArrArr[self::REMOTE_NSMAP_USED][$nsMapURL] = $ref;
         }
-        return \compact('nsMapArr', 'specArrArr', 'errMapArr');
+        return \compact('nsMapArr', 'specArrArr');
     }
 
     public function downLoadNSMapFromURL(string $nsMapURL, bool $getTargetMaps  = false): array {
@@ -169,13 +187,15 @@ class DynoLoader
         if ($res['successArr']) {
             foreach($res['successArr'] as $fileName => $fileDataStr) {
                 if (false !== \strrpos($fileName, 'nsmap.helml')) {
-                    $addArr = self::parseNSMapHELMLStr($fileDataStr);
-                    $nsMapArr += $addArr['nsMapArr'];
-                    foreach($addArr['specArr'] as $specKey => $vStr) {
-                        if (\array_key_exists($specKey, $specArrArr)) {
-                            $specArrArr[$specKey][] = $vStr;
-                        } else {
-                            $specArrArr[$specKey] = [$vStr];
+                    $addArr = $this->parseNSMapHELMLStr($fileDataStr);
+                    if ($addArr) {
+                        $nsMapArr += $addArr['nsMapArr'];
+                        foreach($addArr['specArr'] as $specKey => $vStr) {
+                            if (\array_key_exists($specKey, $specArrArr)) {
+                                $specArrArr[$specKey] = \array_merge($specArrArr[$specKey],$vStr);
+                            } else {
+                                $specArrArr[$specKey] = $vStr;
+                            }
                         }
                     }
                 } elseif ($getTargetMaps && (false !== \strpos($fileName, 'targetmap.helml'))) {
@@ -186,40 +206,27 @@ class DynoLoader
         return \compact('nsMapArr', 'specArrArr', 'targetMapsArr');
     }
 
-    public static function parseNSMapHELMLStr(string $DataStr): array {
+    public static function parseNSMapHELMLStr(string $DataStr): ?array {
         $specArr = [];
-        $nsMapArr = [];
-        if (\class_exists('dynoser\\HELML\\HELMLmicro', false)) {
-            $nsMapArr = HELMLmicro::decode($DataStr);
-            foreach($nsMapArr as $nameSpace => $v) {
-                if (false !== \strpos($nameSpace, '-')) {
-                    $specArr[$nameSpace] = $v;
-                    unset($nsMapArr[$nameSpace]);
+        HELML::$ENABLE_DBL_KEY_ARR = true;
+        $nsMapArr = HELML::decode($DataStr);
+        if (!\is_array($nsMapArr)) {
+            return null;
+        }
+        foreach($nsMapArr as $nameSpace => $v) {
+            if (false !== \strpos($nameSpace, '-')) {
+                if (!\is_array($v)) {
+                    $v = [$v];
                 }
-            }
-        } else {
-            $rows = \explode("\n", $DataStr);
-            foreach($rows as $st) {
-                $i = \strpos($st, ':');
-                if ($i) {
-                    $namespace = \trim(\substr($st, 0, $i));
-                    if (\substr($namespace, 0, 1) === '#' || \substr($namespace, 0, 2) === '//') {
-                        continue;
-                    }
-                    $value = \trim(\substr($st, $i + 1));
-                    if (\strpos($namespace, '-')) {
-                        $specArr[$namespace] = $value;
-                    } else {
-                        $nsMapArr[$namespace] = $value;
-                    }
-                }
+                $specArr[$nameSpace] = $v;
+                unset($nsMapArr[$nameSpace]);
             }
         }
-        return compact('nsMapArr', 'specArr');
+        return \compact('nsMapArr', 'specArr');
     }
     
     public function checkCreateDynoDir(string $vendorDir): string {
-        if (!$this->dynoDir) {
+        if (!self::$dynoDir) {
             $chkDir = \dirname(DYNO_FILE);
             if (!\is_dir($chkDir)) {
                 if (\is_dir($vendorDir) && !\mkdir($chkDir, 0777, true)) {
@@ -229,10 +236,10 @@ class DynoLoader
                     throw new \Exception("Not found folder to storage DYNO_FILE=" . DYNO_FILE . "\n vendorDir=$vendorDir \n dir=$chkDir");
                 }
             }
-            $this->dynoDir = $chkDir;
-            $this->dynoNSmapFile = $chkDir . '/nsmap.php';
+            self::$dynoDir = $chkDir;
+            self::$dynoNSmapFile = $chkDir . '/dyno-nsmap' . (self::$useHELMLforNSmap ? '.helml' : '.php');
         }
-        return $this->dynoDir;
+        return self::$dynoDir;
     }
     
     public static function pasreNsMapStr(string $filePathString): ?array {
@@ -269,7 +276,7 @@ class DynoLoader
     }
     public function resolve(string $filePathString, string $classFullName, string $nameSpaceKey): string {
         // "fromURL [optional parameters] replaceNameSpace checkFiles"
-        $unArr = self::pasreNsMapStr($filePathString);
+        $unArr = $this->pasreNsMapStr($filePathString);
         if (!$unArr) {
             return '';
         }
@@ -296,7 +303,7 @@ class DynoLoader
         //$classFile = $fullTargetPath . $pkgChkFile;
         $checkFile = $fullTargetPath . $unArr['checkFilesStr'];
 
-        if ((!\is_file($checkFile) || $this->forceDownloads) && AutoLoad::$autoInstall) {
+        if ((!\is_file($checkFile) || self::$forceDownloads) && AutoLoad::$autoInstall) {
             // File not found - try load and install
             if (!\is_dir($fullTargetPath) && !mkdir($fullTargetPath, 0777, true)) {
                 throw new \Exception("Can't create target path for download package: $fullTargetPath , foor class=$classFullName");
