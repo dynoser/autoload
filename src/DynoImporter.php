@@ -8,6 +8,7 @@ use dynoser\HELML\HELML;
 class DynoImporter extends DynoLoader
 {
     public const NSMAP_LOCAL_FILES_KEY = 'nsmap-local-files';
+    public const COMPOSER_LOCK_HASH    = 'composer-hash';
     /**
      * Get remote-nsmap urls from cache-nsmap-file + this->dynoNSmapURLarr + DYNO_NSMAP_URL
      *
@@ -33,6 +34,7 @@ class DynoImporter extends DynoLoader
 
             // 1. add namespaces from vendor (composer) to dynoArr
             $specArrArr = $this->addNameSpacesFromComposer(self::$vendorDir);
+            AutoLoadSetup::$dynoArr[self::COMPOSER_LOCK_HASH] = self::getComposerLockHash();
             
             // 2. scan nsmap-s from local folders
             $locNsSpecArr = $this->addNameSpacesFromLocalNSMaps();
@@ -153,15 +155,27 @@ class DynoImporter extends DynoLoader
         return \compact('nsMapArr', 'specArrArr');
     }
     
-    public function updateFromComposer(string $vendorDir) {
+    public function updateFromComposer(bool $alwaysUpdate) {
         if (DYNO_FILE) {
+            $changed = true;
+            $currComposerLockHash = self::getComposerLockHash();
             // reload last version of dynoFile
             if (\file_exists(DYNO_FILE)) {
                 AutoLoadSetup::$dynoArr = (require DYNO_FILE);
+                if (!empty(AutoLoadSetup::$dynoArr[self::COMPOSER_LOCK_HASH])
+                    && (AutoLoadSetup::$dynoArr[self::COMPOSER_LOCK_HASH] === $currComposerLockHash)) {
+                        $changed = false;
+                }
             }
-            $changed = $this->addNameSpacesFromComposer($vendorDir);
-            $this->checkCreateDynoDir($vendorDir);
-            $this->saveDynoFile(DYNO_FILE);
+            if (!\is_array(AutoLoadSetup::$dynoArr)) {
+                AutoLoadSetup::$dynoArr = [];
+            }
+            if ($changed || $alwaysUpdate) {
+                $specArrArr = $this->addNameSpacesFromComposer(AutoLoadSetup::$vendorDir);
+                AutoLoadSetup::$dynoArr[self::COMPOSER_LOCK_HASH] = $currComposerLockHash;
+                $this->checkCreateDynoDir(AutoLoadSetup::$vendorDir);
+                $this->saveDynoFile(DYNO_FILE);
+            }
         }
         return $changed;
     }
@@ -238,6 +252,9 @@ class DynoImporter extends DynoLoader
 
         // try replace *pathAbs to prefixed-relative pathes
         foreach($keyToPathArr as $key => $pathAbs) {
+            if (!\is_string($pathAbs)) {
+                continue;
+            }
             if (\substr($pathAbs, 0, 1) !== '*') {
                 if ($starPrefixRequired) {
                     continue;
@@ -260,14 +277,16 @@ class DynoImporter extends DynoLoader
         // get current dynoArr
         $dynoArr = AutoLoadSetup::$dynoArr;
         self::convertAbsPathesToPrefixed($dynoArr, true);        
-
-        $dynoStr = '<' . "?php\n" . 'return ';
+        
+        // save baseDir-prefiexs
         $baseDirArr = AutoLoader::$classesBaseDirArr;
+        // do not save special-prefixes
         foreach(['*','?',':'] as $k) {
             unset($baseDirArr[$k]);
         }
         $dynoArr[AutoLoadSetup::BASE_DIRS_KEY] = $baseDirArr;
-        $dynoStr .= \var_export($dynoArr, true) . ";\n";
+
+        $dynoStr = '<' . "?php\n" . 'return ' . \var_export($dynoArr, true) . ";\n";
         $wb = \file_put_contents($dynoFile, $dynoStr);
         return $wb ? true: false;
     }
@@ -352,7 +371,7 @@ class DynoImporter extends DynoLoader
         return $specArrArr;
     }
 
-    public function loadComposersPSR4(string $vendorDir): ?array {
+    public function loadComposerNameSpaces(string $vendorDir): ?array {
         $nsMapArr = [];
         $specArrArr = [];
 
@@ -459,12 +478,28 @@ class DynoImporter extends DynoLoader
         }
         return \compact('nsMapArr', 'specArrArr');
     }
+    
+    public static function getComposerLockHash(): ?string {
+        $composerLockFile = AutoLoadSetup::$rootDir . '/composer.lock';
+        if (\is_file($composerLockFile)) {
+            $dataStr = \file_get_contents($composerLockFile);
+            $findStr = '"content-hash": "';
+            $i = \strpos($dataStr, $findStr);
+            if ($i) {
+                $hashHex = substr($dataStr, $i + \strlen($findStr), 32);
+                if ((\strlen($hashHex) === 32) && \ctype_xdigit($hashHex)) {
+                    return $hashHex;
+                }
+            }
+        }
+        return null;
+    }
 
     public function addNameSpacesFromComposer(string $vendorDir): ?array {
         $dynoArr = & AutoLoadSetup::$dynoArr;
         assert(\is_array($dynoArr));
 
-        $compScanArr = $this->loadComposersPSR4($vendorDir);
+        $compScanArr = $this->loadComposerNameSpaces($vendorDir);
         if (\is_array($compScanArr)) {
             $specArrArr = $compScanArr['specArrArr'];
             $nsMapArr = $compScanArr['nsMapArr'];
