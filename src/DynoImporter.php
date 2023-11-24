@@ -3,9 +3,11 @@ namespace dynoser\autoload;
 
 use dynoser\autoload\AutoLoadSetup;
 use dynoser\autoload\AutoLoader;
+use dynoser\HELML\HELML;
 
 class DynoImporter extends DynoLoader
 {
+    public const NSMAP_LOCAL_FILES_KEY = 'nsmap-local-files';
     /**
      * Get remote-nsmap urls from cache-nsmap-file + this->dynoNSmapURLarr + DYNO_NSMAP_URL
      *
@@ -15,68 +17,138 @@ class DynoImporter extends DynoLoader
         // get current nsmap (only to get links to remote nsmap)
          $nsMapArr = $this->loadNSMapFile();
          // get current remote-nsmap url list
-         $remoteNSMapURLs = \array_merge($this->dynoNSmapURLArr, $nsMapArr[self::REMOTE_NSMAP_KEY] ?? []);
+         $remoteNSMapURLs = \array_merge(self::$dynoNSmapURLArr, $nsMapArr[self::REMOTE_NSMAP_KEY] ?? []);
          if (\defined('DYNO_NSMAP_URL')) {
              $remoteNSMapURLs[] = \constant('DYNO_NSMAP_URL');
          }
-         return $remoteNSMapURLs;
+         return \array_unique($remoteNSMapURLs);
     }
     
     public function rebuildDynoCache($subTimeSecOnErr = 30): ?array {
         try {
-            $this->checkCreateDynoDir($this->vendorDir);
+            $this->checkCreateDynoDir(self::$vendorDir);
 
-            // get remote-nsmap urls from cache-nsmap-file + this->dynoNSmapURLarr + DYNO_NSMAP_URL
-            $remoteNSMapURLs = $this->getCachedRemoteNSMapURLs();
+            // 0. get pre-loaded classesArr
+            AutoLoadSetup::$dynoArr = AutoLoader::$classesArr;
 
-            // load nsmap-s from local folders
-            $dlMapArr = $this->scanLoadNSMaps($this->vendorDir);
-            $nsMapArr = $dlMapArr['nsMapArr'];
-            $specArrArr = $dlMapArr['specArrArr'];
-            if (isset($specArrArr[self::REMOTE_NSMAP_KEY])) {
-                $remoteNSMapURLs = \array_merge($remoteNSMapURLs, $specArrArr[self::REMOTE_NSMAP_KEY]);
-            }
-            $remoteNSMapURLs = \array_unique($remoteNSMapURLs);
+            // 1. add namespaces from vendor (composer) to dynoArr
+            $specArrArr = $this->addNameSpacesFromComposer(self::$vendorDir);
             
-            if (AutoLoader::$autoInstall) {
-                $dlMapArr = $this->downLoadNSMaps($remoteNSMapURLs);
-                if ($dlMapArr) {
-                    $nsMapArr += $dlMapArr['nsMapArr'];
+            // 2. scan nsmap-s from local folders
+            $locNsSpecArr = $this->addNameSpacesFromLocalNSMaps();
+            
+            foreach($locNsSpecArr as $k => $v) {
+                if (\array_key_exists($k, $specArrArr)) {
+                    $specArrArr[$k] += $v;
+                } else {
+                    $specArrArr[$k] = $v;
                 }
             }
-            $this->dynoArr = AutoLoader::$classesArr;
-            $this->updateFromComposer($this->vendorDir);
-            $this->dynoArr = \array_merge($this->dynoArr, $nsMapArr);
+            
+            // get old remote-nsmap urls from cache-nsmap-file + this->dynoNSmapURLarr + DYNO_NSMAP_URL
+            $remoteNSMapURLs = \array_unique(\array_merge($specArrArr[self::REMOTE_NSMAP_KEY] ?? [], $this->getCachedRemoteNSMapURLs()));
+
+            // 3. add remote nsmap (if remote nsmaps enabled)
+            $nsMapArr = [];
+            if (self::$dynoNSmapFile && $remoteNSMapURLs) {
+                $dlMapArr = $this->downLoadNSMaps($remoteNSMapURLs);
+                if ($dlMapArr) {
+                    $nsMapArr = $dlMapArr['nsMapArr'];
+                    // add nsMapArr to dynoArr
+                    foreach($nsMapArr as $nameSpace => $xpath) {
+                        if (empty(AutoLoadSetup::$dynoArr[$nameSpace])) {
+                            // if pkg exist then change path from remote to local
+                            if (substr($xpath, 0, 1) === ':') {
+                                $unArr = $this->unpackXPath($xpath);
+                                if (!$unArr) {
+                                    continue;
+                                }
+                                if (\is_file($unArr['checkFile'])) {
+                                    $xpath = $unArr['replaceNameSpace'];
+                                }
+                            }
+                            AutoLoadSetup::$dynoArr[$nameSpace] = $xpath;
+                        }
+                    }
+                    // add specArr
+                    foreach($dlMapArr['specArrArr'] as $k => $v) {
+                        if (!isset($specArrArr[$k])) {
+                            $specArrArr[$k] = [];
+                        }
+                        assert(\is_array($v));
+                        $specArrArr[$k] = \array_merge($specArrArr[$k], $v);
+                    }
+                }
+            }
+
             $this->saveDynoFile(DYNO_FILE);
-            $nsMapArr[self::REMOTE_NSMAP_KEY] = $remoteNSMapURLs;
-            $this->saveNSMapFile($this->dynoNSmapFile, $nsMapArr);
+
+            if (self::$dynoNSmapFile) {
+                $nsMapArr[self::REMOTE_NSMAP_KEY] = $remoteNSMapURLs;
+                $this->saveNSMapFile(self::$dynoNSmapFile, $nsMapArr);
+            }
         } catch(\Throwable $e) {
             $newMTime = \time() - $subTimeSecOnErr;
-            if (\is_file($this->dynoNSmapFile)) {
-                \touch($this->dynoNSmapFile, $newMTime);
+            if (\is_file(self::$dynoNSmapFile)) {
+                \touch(self::$dynoNSmapFile, $newMTime);
             }
             $nsMapArr = null;
         }
         return $nsMapArr;
     }
+    
+    public function unpackXPath($xpath): ?array {
+        $unArr = $this->pasreNsMapStr($xpath);
+        if (!$unArr) {
+            return null;
+        }
+        $fullTargetPath = AutoLoader::getPathPrefix($unArr['targetUnpackDir']);
+        if (!$fullTargetPath) {
+            return null;
+        }
+        $fullTargetPath = \strtr($fullTargetPath, '\\', '/');
+        $oneFileMode = (\substr($fullTargetPath, -4) === '.php');
+        if ($oneFileMode) {
+            $fullTargetPath = \dirname($fullTargetPath) . '/';
+        }
+        if (!$fullTargetPath || (\substr($fullTargetPath, -1) !== '/')) {
+            return null;
+        }
+        $unArr['fullTargetPath'] = $fullTargetPath;
+        $unArr['replaceNameSpace'] = \strtr($unArr['replaceNameSpace'], '\\', '/');
+        $unArr['checkFile'] = $fullTargetPath . $unArr['checkFilesStr'];
+        return $unArr;
+    }
         
-    public function scanLoadNSMaps(string $vendorDir): array {
+    public function scanLoadLocalNSMaps(string $prefixChar = '@'): array {
+        $searchInDir = AutoLoader::getPathPrefix($prefixChar);
+        if (!$searchInDir) {
+            throw new \Exception("Prefix char is not defined: $prefixChar");
+        }
         $nsMapArr = [];   // [namespace] => path (like AutoLoader::$classes)
-        $specArrArr = []; // [spec-keys] => [array of strings]
+        $specArrArr = [self::NSMAP_LOCAL_FILES_KEY => []]; // [spec-keys] => [array of strings]
         // get All vendor-nsmap.helml files
-        $allNSMapFilesArr = self::getSubSubDirFilesArr($vendorDir, '/nsmap.helml', true, true);
+        $allNSMapFilesArr = self::getSubSubDirFilesArr($searchInDir, '/nsmap.helml', true, true);
+        $vlen = \strlen($searchInDir);
         // walk all vendor-nsmap.helml files and parse
         foreach($allNSMapFilesArr as $pkgName => $nsMapFullFile) {
+            $prefixedShortName = '@' . \substr($nsMapFullFile, $vlen);
             $fileDataStr = \file_get_contents($nsMapFullFile);
-            $addArr = self::parseNSMapHELMLStr($fileDataStr);
-            $nsMapArr += $addArr['nsMapArr'];
-            foreach($addArr['specArr'] as $specKey => $vStr) {
-                if (\array_key_exists($specKey, $specArrArr)) {
-                    $specArrArr[$specKey][] = $vStr;
-                } else {
-                    $specArrArr[$specKey] = [$vStr];
+            $addArr = $fileDataStr ? self::parseNSMapHELMLStr($fileDataStr) : null;
+            if ($addArr) {
+                $ref = 'Ns:' . \count($addArr['nsMapArr']) . ', Spec:' . \count($addArr['specArr']);
+                $nsMapArr += $addArr['nsMapArr'];
+                foreach($addArr['specArr'] as $specKey => $vStr) {
+                    if (\array_key_exists($specKey, $specArrArr)) {
+                        $specArrArr[$specKey] = \array_merge($specArrArr[$specKey], $vStr);
+                    } else {
+                        $specArrArr[$specKey] = $vStr;
+                    }
                 }
+            } else {
+                $ref = "ERROR";
             }
+            $specArrArr[self::NSMAP_LOCAL_FILES_KEY][$prefixedShortName] = $ref;
         }
         return \compact('nsMapArr', 'specArrArr');
     }
@@ -84,20 +156,24 @@ class DynoImporter extends DynoLoader
     public function updateFromComposer(string $vendorDir) {
         if (DYNO_FILE) {
             // reload last version of dynoFile
-            if (($this->dynoArrChanged || empty($this->dynoArr)) && \file_exists(DYNO_FILE)) {
-                $this->dynoArr = (require DYNO_FILE);
-                $this->dynoArrChanged = false;
+            if (\file_exists(DYNO_FILE)) {
+                AutoLoadSetup::$dynoArr = (require DYNO_FILE);
             }
-            $changed = $this->importComposersPSR4($vendorDir);
+            $changed = $this->addNameSpacesFromComposer($vendorDir);
             $this->checkCreateDynoDir($vendorDir);
             $this->saveDynoFile(DYNO_FILE);
         }
-        return $this->dynoArrChanged;
+        return $changed;
     }
     
     public function loadNSMapFile(): ?array {
-        if ($this->dynoNSmapFile && \is_file($this->dynoNSmapFile)) {
-            $nsMapArr = (require $this->dynoNSmapFile);
+        if (self::$dynoNSmapFile && \is_file(self::$dynoNSmapFile)) {
+            if (self::$useHELMLforNSmap) {
+                $dataStr = \file_get_contents(self::$dynoNSmapFile);
+                $nsMapArr = HELML::decode($dataStr);
+            } else {
+                $nsMapArr = (require self::$dynoNSmapFile);
+            }
             if (\is_array($nsMapArr)) {
                 return $nsMapArr;
             }
@@ -105,8 +181,12 @@ class DynoImporter extends DynoLoader
         return null;
     }
     public function saveNSMapFile(string $nsMapFile, array $nsMapArr) {
-        $dynoStr = '<' . "?php\n" . 'return ';
-        $dynoStr .= \var_export($nsMapArr, true) . ";\n";
+        if (self::$useHELMLforNSmap) {
+            $dynoStr = HELML::encode($nsMapArr);            
+        } else {
+            $dynoStr = '<' . "?php\n" . 'return ';
+            $dynoStr .= \var_export($nsMapArr, true) . ";\n";
+        }
         $wb = \file_put_contents($nsMapFile, $dynoStr);
         if (!$wb) {
             throw new \Exception("Can't write nsmap-file: " . $nsMapFile);
@@ -114,26 +194,82 @@ class DynoImporter extends DynoLoader
     }
 
     public function resetRemoteNSMapURLs(array $remoteNSMapURLs): ?array {
-        if (!$this->dynoNSmapFile) {
+        if (!self::$dynoNSmapFile) {
             throw new \Exception("dynoNSmapFile undefined");
         }
         $nsMapArr = $this->loadNSMapFile();
         if (\is_array($nsMapArr)) {
             $nsMapArr[self::REMOTE_NSMAP_KEY] = $remoteNSMapURLs;
-            $this->saveNSMapFile($this->dynoNSmapFile, $nsMapArr);
+            $this->saveNSMapFile(self::$dynoNSmapFile, $nsMapArr);
         }
         return $nsMapArr;
     }
-
-    public function saveDynoFile(string $dynoFile) {
-        $dynoStr = '<' . "?php\n" . 'return ';
-        $this->dynoArr[AutoLoadSetup::BASE_DIRS_KEY] = AutoLoader::$classesBaseDirArr;
-        $dynoStr .= \var_export($this->dynoArr, true) . ";\n";
-        $wb = \file_put_contents($dynoFile, $dynoStr);
-        if (!$wb) {
-            throw new \Exception("Can't write dyno-file: " . $dynoFile);
+    
+    /**
+     * Сonverting absolute paths in array that begin with the prefix "*"
+     *  to relative paths, with substitution of their prefixes, when possible.
+     *
+     * @param string $keyToPathArr [namespace] => *path
+     * @param bool $starPrefixRequired
+     * @return string
+     */
+    public static function convertAbsPathesToPrefixed(array & $keyToPathArr, bool $starPrefixRequired = true): void {
+        // get current baseDir and remove special-prefixes
+        $baseDirArr = AutoLoader::$classesBaseDirArr;
+        foreach(['*','?',':'] as $k) {
+            unset($baseDirArr[$k]);
         }
-        $this->dynoArrChanged = false;
+
+        // prepare pathes array
+        $pathesArr = [];
+        foreach($baseDirArr as $prefixChar => $path) {
+            $l = \strlen($path);
+            if (!$l) {
+                continue;
+            }
+            $baseDirArr[$prefixChar] = \strtr($path, '\\', '/');
+            $pathesArr[$prefixChar] = $l;
+        }
+        unset($pathesArr['~']);
+        \arsort($pathesArr);
+        foreach($pathesArr as $prefixChar => $len) {
+            $pathesArr[$prefixChar] = [$len, $baseDirArr[$prefixChar]];
+        }
+
+        // try replace *pathAbs to prefixed-relative pathes
+        foreach($keyToPathArr as $key => $pathAbs) {
+            if (\substr($pathAbs, 0, 1) !== '*') {
+                if ($starPrefixRequired) {
+                    continue;
+                }
+            } else {
+                $pathAbs = \substr($pathAbs, 1);
+            }
+            $pathAbs = \strtr($pathAbs, '\\', '/');
+            foreach($pathesArr as $prefixChar => $lenPath) {
+                $len = $lenPath[0];
+                if (\substr($pathAbs, 0, $len) === $lenPath[1]) {
+                    $keyToPathArr[$key] = $prefixChar . \substr($pathAbs, $len);
+                    break;
+                }
+            }
+        }
+    }
+
+    public function saveDynoFile(string $dynoFile): bool {
+        // get current dynoArr
+        $dynoArr = AutoLoadSetup::$dynoArr;
+        self::convertAbsPathesToPrefixed($dynoArr, true);        
+
+        $dynoStr = '<' . "?php\n" . 'return ';
+        $baseDirArr = AutoLoader::$classesBaseDirArr;
+        foreach(['*','?',':'] as $k) {
+            unset($baseDirArr[$k]);
+        }
+        $dynoArr[AutoLoadSetup::BASE_DIRS_KEY] = $baseDirArr;
+        $dynoStr .= \var_export($dynoArr, true) . ";\n";
+        $wb = \file_put_contents($dynoFile, $dynoStr);
+        return $wb ? true: false;
     }
 
 
@@ -195,29 +331,53 @@ class DynoImporter extends DynoLoader
         }
         return $foundSubSubFilesArr;
     }
+    
+    public function addNameSpacesFromLocalNSMaps(): ?array {
+        $dynoArr = & AutoLoadSetup::$dynoArr;
+        assert(\is_array($dynoArr));
 
-    public function convertComposersPSR4toDynoArr(string $vendorDir): ?array {
+        $dlMapArr = $this->scanLoadLocalNSMaps('@');
+        if (\is_array($dlMapArr)) {
+            $specArrArr = $dlMapArr['specArrArr'];
+            $nsMapArr = $dlMapArr['nsMapArr'];
+            self::convertAbsPathesToPrefixed($nsMapArr, true);
+            foreach($nsMapArr as $nameSpace => $srcFolders) {
+                if (!\array_key_exists($nameSpace, $dynoArr) || $dynoArr[$nameSpace] !== $srcFolders) {
+                    $dynoArr[$nameSpace] = $srcFolders;
+                }
+            }
+        } else {
+            $specArrArr = null;
+        }
+        return $specArrArr;
+    }
+
+    public function loadComposersPSR4(string $vendorDir): ?array {
+        $nsMapArr = [];
+        $specArrArr = [];
+
+        // try import namespaces from this file:
         $composersPSR4file = $vendorDir . '/composer/autoload_psr4.php';
-        if (!\is_file($composersPSR4file)) {
-            return null;
-        }
-        $composerPSR4arr = (require $composersPSR4file);
-        if (!\is_array($composerPSR4arr)) {
-            return null;
-        }
-        $dynoArr = [];
-        foreach($composerPSR4arr as $nameSpace => $srcFoldersArr) {
-            foreach($srcFoldersArr as $n => $path) {
-                $srcFoldersArr[$n] = '*' . \strtr($path, '\\', '/') . '/*';
+        if (\is_file($composersPSR4file)) {
+            $composerPSR4arr = (require $composersPSR4file);
+            if (\is_array($composerPSR4arr)) {
+                foreach($composerPSR4arr as $nameSpace => $srcFoldersArr) {
+                    foreach($srcFoldersArr as $n => $path) {
+                        $srcFoldersArr[$n] = '*' . \strtr($path, '\\', '/') . '/*';
+                    }
+                    $nameSpace = \strtr($nameSpace, '\\', '/');
+                    if (\substr($nameSpace, -1) === '/') {
+                        $nameSpace = \substr($nameSpace, 0, -1);
+                        if (\is_array($srcFoldersArr) && \count($srcFoldersArr) === 1) {
+                            $nsMapArr[$nameSpace] = \reset($srcFoldersArr);
+                        } else {
+                            $nsMapArr[$nameSpace] = $srcFoldersArr;
+                        }
+                    }
+                }
             }
-            $nameSpace = \trim(\strtr($nameSpace, '\\', '/'), "/ \n\r\v\t");
-            if (\is_array($srcFoldersArr) && \count($srcFoldersArr) === 1) {
-                $dynoArr[$nameSpace] = \reset($srcFoldersArr);
-            } else {
-                $dynoArr[$nameSpace] = $srcFoldersArr;
-            }
         }
-        
+
         // check composer autoload_files
         $composerFilesFile = $vendorDir . '/composer/autoload_files.php';
         if (\is_file($composerFilesFile)) {
@@ -226,17 +386,13 @@ class DynoImporter extends DynoLoader
                 foreach($composerAutoLoadFilesArr as $key => $file) {
                      $composerAutoLoadFilesArr[$key] = \strtr($file, '\\', '/');
                 }
+                self::convertAbsPathesToPrefixed($composerAutoLoadFilesArr, false);
+                $specArrArr['composer-autoload-files'] = \array_values($composerAutoLoadFilesArr);
             }
-        }        
-        // $dynoArr['autoload-files'] = $composerAutoLoadFilesArr ? $composerAutoLoadFilesArr : [];
-        $dynoArr['autoload-files'] = [];
-        $dynoArr['dyno-aliases'] = [];
-        $dynoArr['dyno-update'] = [];
-        $dynoArr['dyno-requires'] = [];
+        }
 
-        // get All vendor-composer.json files
-        $allVendorComposerJSONFilesArr = self::getSubSubDirFilesArr($vendorDir, '/composer.json', true, false);
-        // walk all vendor-composer.json files and remove [psr-4] if have [files]
+        // walk all vendor/*/composer.json files
+        $allVendorComposerJSONFilesArr = self::getSubSubDirFilesArr($vendorDir, '/composer.json', true, false);        
         foreach($allVendorComposerJSONFilesArr as $pkgName => $composerFullFile) {
             $JsonDataStr = \file_get_contents($composerFullFile);
             if (!$JsonDataStr) {
@@ -246,30 +402,47 @@ class DynoImporter extends DynoLoader
             if (!\is_array($JsonDataArr)) {
                 continue;
             }
+            $psr4nsArr = [];
+            if (!empty($JsonDataArr['autoload']['psr-4'])) {
+                $foundPSR4arr = $JsonDataArr['autoload']['psr-4'];
+                if (\is_array($foundPSR4arr)) {
+                    foreach($foundPSR4arr as $nsPrefix => $inVendorPath) {
+                        $nsKey = \strtr($nsPrefix, '\\', '/');
+                        $psr4nsArr[$nsKey] = $inVendorPath;
+                        if (\substr($nsKey, -1) === '/') {
+                            $nsKey = \substr($nsKey, 0, -1);
+                            if (!\array_key_exists($nsKey, $nsMapArr)) {
+                                $chkPath = $vendorDir . '/'. \trim(\strtr($inVendorPath, '\\','/'), '/ ');
+                                if (\is_dir($chkPath)) {
+                                    $nsMapArr[$nsKey] = '*' . $chkPath . '/*';
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             if (!empty($JsonDataArr['autoload']['files']) && \substr($pkgName, 0, 8) !== 'dynoser/') {
-                $dynoArr['autoload-files'][$pkgName] = $JsonDataArr['autoload']['files'];
-
-                if (!empty($JsonDataArr['autoload']['psr-4']) && \is_array($JsonDataArr['autoload']['psr-4'])) {
-                    foreach($JsonDataArr['autoload']['psr-4'] as $psr4 => $path) {
-                        $psr4 = \trim($psr4, '\\/ ');
-                        $psr4 = \strtr($psr4, '\\', '/');
-                        unset($dynoArr[$psr4]);
+                $specArrArr['autoload-files'][$pkgName] = $JsonDataArr['autoload']['files'];
+                foreach($psr4nsArr as $nsKey => $inVendorPath) {
+                    $nsKey = \trim($nsKey, '/ ');
+                    if (isset($nsMapArr[$nsKey])) {
+                        // remove this namespace from our autoloader, let composer's autoloader load this namespace
+                        unset($nsMapArr[$nsKey]);
                     }
                 }
             }
             if (!empty($JsonDataArr['extra']) && \is_array($JsonDataArr['extra'])) {
                 $extraArr = $JsonDataArr['extra'];
-                foreach(['dyno-update', 'dyno-requires', 'dyno-aliases'] as $key) {
-                    if (array_key_exists($key, $extraArr)) {
-                        $dynoArr[$key][$pkgName] = $extraArr[$key];
+                foreach(['dyno-aliases'] as $key) {
+                    if (\array_key_exists($key, $extraArr)) {
+                        $specArrArr[$key][$pkgName] = $extraArr[$key];
                     }
                 }
             }
         }
 
-        unset($dynoArr['autoload-files']); // no need more
         // import dyno-aliases
-        foreach($dynoArr['dyno-aliases'] as $currPkg => $aliasesArr) {
+        foreach($specArrArr['dyno-aliases'] as $currPkg => $aliasesArr) {
             if (\is_string($aliasesArr)) {
                 $aliasesArr = [$aliasesArr];
             }
@@ -277,42 +450,39 @@ class DynoImporter extends DynoLoader
                 foreach($aliasesArr as $toClassName => $fromClassName) {
                     if (\is_string($fromClassName)) {
                         $toClassName = \trim(\strtr($toClassName, '/', '\\'), ' \\');
-                        $dynoArr[$toClassName] = '?' . \strtr($fromClassName, '/', '\\');
+                        if (empty($nsMapArr[$toClassName])) {// do not overwrite
+                            $nsMapArr[$toClassName] = '?' . \strtr($fromClassName, '/', '\\');
+                        }
                     }
                 }
-                unset($dynoArr['dyno-aliases'][$currPkg]); //already imported
             }
         }
-        if (empty($dynoArr['dyno-aliases'])) {
-            unset($dynoArr['dyno-aliases']);
-        }
-        return $dynoArr;
+        return \compact('nsMapArr', 'specArrArr');
     }
 
-    public function importComposersPSR4(string $vendorDir): bool {
-        if (!is_array($this->dynoArr)) {
-            $this->dynoArr = [];
-        }
-        $this->dynoArr += AutoLoader::$classesArr;
-        $dynoArr = $this->convertComposersPSR4toDynoArr($vendorDir);
-        if (\is_array($dynoArr)) {
-            foreach($dynoArr as $nameSpace => $srcFoldersArr) {
-                if (!\array_key_exists($nameSpace, $this->dynoArr) || $this->dynoArr[$nameSpace] !== $srcFoldersArr) {
-                    $this->dynoArr[$nameSpace] = $srcFoldersArr;
-                    $this->dynoArrChanged = true;
+    public function addNameSpacesFromComposer(string $vendorDir): ?array {
+        $dynoArr = & AutoLoadSetup::$dynoArr;
+        assert(\is_array($dynoArr));
+
+        $compScanArr = $this->loadComposersPSR4($vendorDir);
+        if (\is_array($compScanArr)) {
+            $specArrArr = $compScanArr['specArrArr'];
+            $nsMapArr = $compScanArr['nsMapArr'];
+            self::convertAbsPathesToPrefixed($nsMapArr, true);
+            foreach($nsMapArr as $nameSpace => $srcFolders) {
+                if (!\array_key_exists($nameSpace, $dynoArr) || $dynoArr[$nameSpace] !== $srcFolders) {
+                    $dynoArr[$nameSpace] = $srcFolders;
                 }
-                if (\is_string($srcFoldersArr)) {
-                    $srcFoldersArr = [$srcFoldersArr];
-                }
-                AutoLoader::addNameSpaceBase($nameSpace, $srcFoldersArr, false);
             }
+        } else {
+            $specArrArr = null;
         }
-        return $this->dynoArrChanged;
+        return $specArrArr;
     }
     
     public function getAliases($firstChar = '?'): array {
         $aliasesArr = []; // [aliasTO] => [classFROM]
-        foreach($this->dynoArr as $nameSpace => $pathes) {
+        foreach(AutoLoadSetup::$dynoArr as $nameSpace => $pathes) {
             if (\is_string($pathes)) {
                 $pathes = [$pathes];
             }
