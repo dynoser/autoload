@@ -17,15 +17,11 @@
         }
     }
     $rootDir    = \rtrim(strtr($rootDir, '\\', '/'), '/');
-    $vendorDir  = \defined('VENDOR_DIR') ? \constant('VENDOR_DIR')  : $rootDir . '/vendor';
-    $classesDir = \defined('CLASSES_DIR')? \constant('CLASSES_DIR') : $rootDir . '/includes/classes';
-    $extDir     = \defined('EXT_FS_DIR') ? \constant('EXT_FS_DIR')  : $rootDir . '/ext';
-    $storageDir = \defined('STORAGE_DIR')? \constant('STORAGE_DIR') : $rootDir . '/storage';
 
     if (!\class_exists('dynoser\\autoload\\AutoLoadSetup', false)) {
         require_once __DIR__ . "/src/AutoLoadSetup.php";
     }
 
-    (new \dynoser\autoload\AutoLoadSetup($rootDir, $vendorDir, $classesDir, $extDir, $storageDir));
+    (new \dynoser\autoload\AutoLoadSetup($rootDir));
 
 })($file ?? '');// $file is Composer value
