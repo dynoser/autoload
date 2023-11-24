@@ -16,7 +16,7 @@ class AutoLoadSetup
     
     public static $composerAutoLoaderLoaded = false;
 
-    public function __construct($rootDirSet = null, $vendorDir = null, $classesDir = null, $extDir = null, $storageDirSet = null) {
+    public function __construct($rootDirSet = null) {
         $myOwnDir   = \strtr(__DIR__, '\\', '/');
 
         // set rootDir
@@ -28,8 +28,8 @@ class AutoLoadSetup
         $rootDir = self::$rootDir;
 
         // set storageDir and DYNO_FILE
-        if ($storageDirSet) {
-            self::$storageDir = \rtrim(\strtr($storageDirSet, '\\', '/'), '/ *');
+        if (\defined('STORAGE_DIR')) {
+            self::$storageDir = \rtrim(\strtr(\constant('STORAGE_DIR'), '\\', '/'), "/ *\n\r\t");
         } elseif (!self::$storageDir) {
             self::$storageDir = \defined('DYNO_FILE') ? \strtr(\dirname(DYNO_FILE, 2), '\\', '/') : ($rootDir . '/storage');
         }
@@ -52,11 +52,11 @@ class AutoLoadSetup
                 self::$dynoArr = [];
             }
 
-            $vendorDir  = $vendorDir  ? $vendorDir  : $rootDir . '/vendor';
-            $classesDir = $classesDir ? $classesDir : $rootDir . '/includes/classes';
-            $extDir     = $extDir     ? $extDir     : $rootDir . '/ext';
-
             if (empty(self::$dynoArr[self::BASE_DIRS_KEY]['@'])) {
+                $vendorDir  = \defined('VENDOR_DIR') ? \constant('VENDOR_DIR')  : $rootDir . '/vendor';
+                $classesDir = \defined('CLASSES_DIR')? \constant('CLASSES_DIR') : $rootDir . '/includes/classes';
+                $extDir     = \defined('EXT_FS_DIR') ? \constant('EXT_FS_DIR')  : $rootDir . '/ext';
+
                 AutoLoader::$classesBaseDirArr = [
                     // 1-char prefixes to specify the left part of the path
                     '&' => $rootDir,    // prefix '&' for rootDir
@@ -69,13 +69,11 @@ class AutoLoadSetup
             } else {
                 AutoLoader::$classesBaseDirArr = $baseDirsArr = self::$dynoArr[self::BASE_DIRS_KEY];
 
-                $vendorDir = $baseDirsArr['@'] ?? $vendorDir;
-                $classesDir = $baseDirsArr['+'] ?? $classesDir;
-                $extDir = $baseDirsArr['$'] ?? $extDir;
+                $vendorDir =  \defined('VENDOR_DIR') ? \constant('VENDOR_DIR')  : ($baseDirsArr['@'] ?? $rootDir . '/vendor');
+                $classesDir = \defined('CLASSES_DIR')? \constant('CLASSES_DIR') : ($baseDirsArr['+'] ?? $rootDir . '/includes/classes');
+                $extDir =     \defined('EXT_FS_DIR') ? \constant('EXT_FS_DIR')  : ($baseDirsArr['$'] ?? $rootDir . '/ext');
             }
-            // prefix '*' to specify an absolute path of class
-            // prefix '?' for aliases
-            // prefix ':' for remote-install
+            // set empty special prefixes '*'
             foreach(['*','?',':'] as $k) {
                 AutoLoader::$classesBaseDirArr[$k] = '';
             }
@@ -83,12 +81,10 @@ class AutoLoadSetup
             self::$vendorDir  = $vendorDir;
             self::$classesDir = $classesDir;
             self::$extDir     = $extDir;
+        }
 
-            if (\defined('DYNO_AUTO_INSTALL')) {
-                AutoLoader::$autoInstall = \constant('DYNO_AUTO_INSTALL') ? true : false;
-            } elseif (\array_key_exists('auto-install', self::$dynoArr)) {
-                AutoLoader::$autoInstall = self::$dynoArr['auto-install'] ? true : false;
-            }
+        if (!empty(self::$dynoArr['no-remote'])) {
+            AutoLoader::$enableRemoteInstall = false;
         }
 
         \spl_autoload_register([$classAutoLoader,'autoLoadSpl'], true, true);
@@ -124,24 +120,31 @@ class AutoLoadSetup
         }
     }
     
-    public static function loadComposerAutoLoader($alwaysLoad = false) {
+    public static function loadComposerAutoLoader($alwaysLoad = false, $setMeFirst = true) {
         if (!self::$composerAutoLoaderLoaded || $alwaysLoad) {
-            $composerAutoLoaderFile = self::$vendorDir . '/autoload.php';
-            self::$composerAutoLoaderLoaded = \is_file($composerAutoLoaderFile);
-            if (self::$composerAutoLoaderLoaded) {
-                require $composerAutoLoaderFile;
-                // set our autoloader as first
-                \spl_autoload_unregister(['\\dynoser\\autoload\\AutoLoader','autoLoadSpl']);
-                \spl_autoload_register(['\\dynoser\\autoload\\AutoLoader','autoLoadSpl'], true, true);
+            if (\class_exists('\\Composer\\Autoload\\ClassLoader', false)) {
+                self::$composerAutoLoaderLoaded = true;
+            } else {
+                $composerAutoLoaderFile = self::$vendorDir . '/autoload.php';
+                self::$composerAutoLoaderLoaded = \is_file($composerAutoLoaderFile);
+                if (self::$composerAutoLoaderLoaded) {
+                    require $composerAutoLoaderFile;
+                }
             }
+        }
+        if (self::$composerAutoLoaderLoaded && $setMeFirst) {
+            // set our autoloader as first
+            \spl_autoload_unregister(['\\dynoser\\autoload\\AutoLoader','autoLoadSpl']);
+            \spl_autoload_register(  ['\\dynoser\\autoload\\AutoLoader','autoLoadSpl'], true, true);
         }
         return self::$composerAutoLoaderLoaded;
     }
 
-    public static function updateFromComposer() {
+    public static function updateFromComposer($alwaysUpdate = false) {
         if (self::$dynoObj) {
             try {
-                return self::$dynoObj->updateFromComposer(self::$vendorDir);
+                self::$dynoObj = self::$dynoObj->makeDynoImporterObj();
+                return self::$dynoObj->updateFromComposer($alwaysUpdate);
             } catch (\Throwable $e) {
                 return false;
             }
