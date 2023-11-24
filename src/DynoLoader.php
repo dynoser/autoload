@@ -72,10 +72,10 @@ class DynoLoader
         }
 
         if (!\class_exists($classHashSigBase)) {
-            AutoLoader::$autoInstall = false;
+            AutoLoader::$enableRemoteInstall = false;
         }
 
-        if (AutoLoader::$autoInstall) {
+        if (AutoLoader::$enableRemoteInstall) {
 
             if (!$needUpdateDynoFile && \defined('DYNO_NSMAP_TIMEOUT')) {
                 self::checkCreateDynoDir($vendorDir);
@@ -87,10 +87,6 @@ class DynoLoader
             }
 
             if (\class_exists($classHashSigBase, false)) {
-                // prepare nsmap for self-load (if need)
-                if ($needUpdateDynoFile && !isset(AutoLoadSetup::$dynoArr['dynoser/walkdir'])) {
-                    self::quickPrepareDynoArr($vendorDir);
-                }
 
                 AutoLoader::$optionalObj = $this;
             }
