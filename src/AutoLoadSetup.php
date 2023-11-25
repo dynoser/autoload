@@ -141,13 +141,14 @@ class AutoLoadSetup
     }
 
     public static function updateFromComposer($alwaysUpdate = false) {
+        $changed = false;
         if (self::$dynoObj) {
             try {
                 self::$dynoObj = self::$dynoObj->makeDynoImporterObj();
-                return self::$dynoObj->updateFromComposer($alwaysUpdate);
+                $changed = self::$dynoObj->updateFromComposer($alwaysUpdate);
             } catch (\Throwable $e) {
-                return false;
             }
         }
+        return $changed;
     }
 }
