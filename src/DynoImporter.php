@@ -8,7 +8,8 @@ use dynoser\HELML\HELML;
 class DynoImporter extends DynoLoader
 {
     public const NSMAP_LOCAL_FILES_KEY = 'nsmap-local-files';
-    public const COMPOSER_LOCK_HASH    = 'composer-hash';
+    public const    COMPOSER_LOCK_HASH = 'composer-hash';
+    public const    COMPOSER_REAL_HASH = 'composer-real';
     /**
      * Get remote-nsmap urls from cache-nsmap-file + this->dynoNSmapURLarr + DYNO_NSMAP_URL
      *
@@ -35,7 +36,7 @@ class DynoImporter extends DynoLoader
             // 1. add namespaces from vendor (composer) to dynoArr
             $specArrArr = $this->addNameSpacesFromComposer(self::$vendorDir);
             AutoLoadSetup::$dynoArr[self::COMPOSER_LOCK_HASH] = self::getComposerLockHash();
-            
+            AutoLoadSetup::$dynoArr[self::COMPOSER_REAL_HASH] = self::getComposerRealHash();
             // 2. scan nsmap-s from local folders
             $locNsSpecArr = $this->addNameSpacesFromLocalNSMaps();
             
@@ -86,6 +87,19 @@ class DynoImporter extends DynoLoader
             $this->saveDynoFile(DYNO_FILE);
 
             if (self::$dynoNSmapFile) {
+                // add specArrArr ti nsMapArr
+                foreach($specArrArr as $k => $v) {
+                    if (!\is_array($v)) {
+                        $v = [$v];
+                    }
+                    if (\array_key_exists($k, $nsMapArr)) {
+                        if (!\is_array($nsMapArr[$k])) {
+                            $nsMapArr[$k] = [$nsMapArr[$k]];
+                        }
+                        $nsMapArr[$k] += $v;
+                    }
+                }
+                
                 $nsMapArr[self::REMOTE_NSMAP_KEY] = $remoteNSMapURLs;
                 $this->saveNSMapFile(self::$dynoNSmapFile, $nsMapArr);
             }
@@ -173,6 +187,8 @@ class DynoImporter extends DynoLoader
             if ($changed || $alwaysUpdate) {
                 $specArrArr = $this->addNameSpacesFromComposer(AutoLoadSetup::$vendorDir);
                 AutoLoadSetup::$dynoArr[self::COMPOSER_LOCK_HASH] = $currComposerLockHash;
+                AutoLoadSetup::$dynoArr[self::COMPOSER_REAL_HASH] = self::getComposerRealHash();
+
                 $this->checkCreateDynoDir(AutoLoadSetup::$vendorDir);
                 $this->saveDynoFile(DYNO_FILE);
             }
@@ -480,21 +496,28 @@ class DynoImporter extends DynoLoader
     }
     
     public static function getComposerLockHash(): ?string {
-        $composerLockFile = AutoLoadSetup::$rootDir . '/composer.lock';
-        if (\is_file($composerLockFile)) {
-            $dataStr = \file_get_contents($composerLockFile);
-            $findStr = '"content-hash": "';
+        return self::getHexFromFile(AutoLoadSetup::$rootDir . '/composer.lock', '"content-hash": "', 32);
+    }
+    
+    public static function getComposerRealHash(): ?string {
+        return self::getHexFromFile(AutoLoadSetup::$vendorDir . '/composer/autoload_real.php', 'class ComposerAutoloaderInit', 32);
+    }
+    
+    public static function getHexFromFile($fullFileName, $findStr, $getLen = 32): ?string {
+        $result = null;
+        if (\is_file($fullFileName)) {
+            $dataStr = \file_get_contents($fullFileName);
             $i = \strpos($dataStr, $findStr);
-            if ($i) {
-                $hashHex = substr($dataStr, $i + \strlen($findStr), 32);
-                if ((\strlen($hashHex) === 32) && \ctype_xdigit($hashHex)) {
-                    return $hashHex;
+            if (false !== $i) {
+                $chkResult = substr($dataStr, $i + \strlen($findStr), $getLen);
+                if ((\strlen($chkResult) === $getLen) && \ctype_xdigit($chkResult)) {
+                    $result = $chkResult;
                 }
             }
         }
-        return null;
+        return $result;
     }
-
+    
     public function addNameSpacesFromComposer(string $vendorDir): ?array {
         $dynoArr = & AutoLoadSetup::$dynoArr;
         assert(\is_array($dynoArr));
