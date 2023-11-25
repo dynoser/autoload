@@ -134,7 +134,7 @@ class DynoImporter extends DynoLoader
         $vlen = \strlen($searchInDir);
         // walk all vendor-nsmap.helml files and parse
         foreach($allNSMapFilesArr as $pkgName => $nsMapFullFile) {
-            $prefixedShortName = '@' . \substr($nsMapFullFile, $vlen);
+            $prefixedShortName = $prefixChar . \substr($nsMapFullFile, $vlen);
             $fileDataStr = \file_get_contents($nsMapFullFile);
             $addArr = $fileDataStr ? self::parseNSMapHELMLStr($fileDataStr) : null;
             if ($addArr) {
