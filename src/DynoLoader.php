@@ -52,7 +52,7 @@ class DynoLoader
 
         if (\class_exists($classHELML)) {
             $aliasHELML = 'dynoser\\tools\\HELML';
-            if (!class_exists($aliasHELML, false)) {
+            if (!\class_exists($aliasHELML, false)) {
                 \class_alias($classHELML, $aliasHELML, false);
             }
  
@@ -270,64 +270,76 @@ class DynoLoader
             'midArr'
         );
     }
-    public function resolve(string $filePathString, string $classFullName, string $nameSpaceKey): string {
-        // "fromURL [optional parameters] replaceNameSpace checkFiles"
+
+    public function unpackXPath($filePathString): ?array {
         $unArr = $this->pasreNsMapStr($filePathString);
         if (!$unArr) {
-            return '';
+            return null;
         }
         $fullTargetPath = AutoLoader::getPathPrefix($unArr['targetUnpackDir']);
         if (!$fullTargetPath) {
-            return '';
+            return null;
         }
         $fullTargetPath = \strtr($fullTargetPath, '\\', '/');
-
         $oneFileMode = (\substr($fullTargetPath, -4) === '.php');
         if ($oneFileMode) {
             $fullTargetPath = \dirname($fullTargetPath) . '/';
         }
         if (!$fullTargetPath || (\substr($fullTargetPath, -1) !== '/')) {
-            throw new \Exception("Incorrect target namespace-folder: '$fullTargetPath', must specified folder with prefix-char");
+            return null;
         }
-        $lk = \strlen($nameSpaceKey);
-        $addPath = \substr($classFullName, $lk, \strlen($classFullName) - $lk);
-        $addPath = $addPath ? \strtr(\substr($addPath, 1), '\\', '/') : \basename($classFullName);
-        $pkgChkFile = $addPath . '.php';
+        $unArr['fullTargetPath'] = $fullTargetPath;
+        $unArr['replaceNameSpace'] = \strtr($unArr['replaceNameSpace'], '\\', '/');
+        $unArr['checkFile'] = $fullTargetPath . $unArr['checkFilesStr'];
+        return $unArr;
+    }
 
-        $replaceNameSpace = \strtr($unArr['replaceNameSpace'], '\\', '/');
+    public function resolve(string $filePathString, string $classFullName, string $nameSpaceKey): string {
+        // "fromURL [optional parameters] replaceNameSpace checkFiles"
+        $unArr = $this->unpackXPath($filePathString);
+        if (!$unArr) {
+            $replaceNameSpace = '';
+        } else {
+            $replaceNameSpace = $unArr['replaceNameSpace'];
+            $fullTargetPath = $unArr['fullTargetPath'];
+            $checkFile = $unArr['checkFile'];
 
-        //$classFile = $fullTargetPath . $pkgChkFile;
-        $checkFile = $fullTargetPath . $unArr['checkFilesStr'];
+//            $lk = \strlen($nameSpaceKey);
+//            $addPath = \substr($classFullName, $lk, \strlen($classFullName) - $lk);
+//            $addPath = $addPath ? \strtr(\substr($addPath, 1), '\\', '/') : \basename($classFullName);
+//            $pkgChkFile = $addPath . '.php';
 
-        if ((!\is_file($checkFile) || self::$forceDownloads) && AutoLoad::$autoInstall) {
-            // File not found - try load and install
-            if (!\is_dir($fullTargetPath) && !mkdir($fullTargetPath, 0777, true)) {
-                throw new \Exception("Can't create target path for download package: $fullTargetPath , foor class=$classFullName");
-            }
-            if (AutoLoader::$commiterObj) {
-                AutoLoader::$commiterObj->setRepository();
-            }
+            if ((!\is_file($checkFile) || self::$forceDownloads) && AutoLoader::$enableRemoteInstall) {
+                // File not found - try load and install
+                if (!\is_dir($fullTargetPath) && !mkdir($fullTargetPath, 0777, true)) {
+                    throw new \Exception("Can't create target path for download package: $fullTargetPath , foor class=$classFullName");
+                }
+                if (AutoLoader::$commiterObj) {
+                    AutoLoader::$commiterObj->setRepository();
+                }
 
-            $fromURL = $unArr['fromURL'];
-            $hashSigBaseObj = new \dynoser\hashsig\HashSigBase();
-            $res = $hashSigBaseObj->getFilesByHashSig(
-                $fromURL,
-                $fullTargetPath,
-                null,  //array $baseURLs
-                false, //bool $doNotSaveFiles
-                false  //bool $doNotOverWrite
-            );
-            if (empty($res['successArr']) || !empty($res['errorsArr'])) {
-                throw new \Exception("Download problem for class $classFullName , package url=$fromURL");
-            }
-            if (!\in_array($checkFile, $res['successArr'])) {
-                throw new \Exception("Successful downloaded hashsig-package, but not found target class file: $classFullName");
-            }
-            if (isset($res['successArr']['nsmap.helml'])) {
-                $this->nsMapUp();
-            }
-            if (AutoLoader::$commiterObj) {
-                AutoLoader::$commiterObj->addFiles($res['successArr'], $nameSpaceKey, $replaceNameSpace, $classFullName);
+                $fromURL = $unArr['fromURL'];
+                $hashSigBaseObj = new \dynoser\hashsig\HashSigBase();
+                $res = $hashSigBaseObj->getFilesByHashSig(
+                    $fromURL,
+                    $fullTargetPath,
+                    null,  //array $baseURLs
+                    false, //bool $doNotSaveFiles
+                    false  //bool $doNotOverWrite
+                );
+                if (empty($res['successArr']) || !empty($res['errorsArr'])) {
+                    throw new \Exception("Download problem for class $classFullName , package url=$fromURL");
+                }
+                if (!\in_array($checkFile, $res['successArr'])) {
+                    throw new \Exception("Successful downloaded hashsig-package, but not found target class file: $classFullName");
+                }
+                if (isset($res['successArr']['nsmap.helml'])) {
+                    // if local nsmap added, rescan nsmaps
+                    $this->nsMapUp();
+                }
+                if (AutoLoader::$commiterObj) {
+                    AutoLoader::$commiterObj->addFiles($res['successArr'], $nameSpaceKey, $replaceNameSpace, $classFullName);
+                }
             }
         }
         return $replaceNameSpace;
