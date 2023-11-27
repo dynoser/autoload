@@ -17,13 +17,13 @@ class DynoImporter extends DynoLoader
      */
     public function getCachedRemoteNSMapURLs(): array {
         // get current nsmap (only to get links to remote nsmap)
-         $nsMapArr = $this->loadNSMapFile();
-         // get current remote-nsmap url list
-         $remoteNSMapURLs = \array_merge(self::$dynoNSmapURLArr, $nsMapArr[self::REMOTE_NSMAP_KEY] ?? []);
-         if (\defined('DYNO_NSMAP_URL')) {
-             $remoteNSMapURLs[] = \constant('DYNO_NSMAP_URL');
-         }
-         return \array_unique($remoteNSMapURLs);
+        $nsMapArr = $this->loadNSMapFile();
+        // get current remote-nsmap url list
+        $remoteNSMapURLs = \array_merge(self::$dynoNSmapURLArr, $nsMapArr[self::REMOTE_NSMAP_KEY] ?? []);
+        if (\defined('DYNO_NSMAP_URL')) {
+            $remoteNSMapURLs[] = \constant('DYNO_NSMAP_URL');
+        }
+        return \array_unique($remoteNSMapURLs);
     }
     
     public function rebuildDynoCache($subTimeSecOnErr = 30): ?array {
@@ -113,29 +113,6 @@ class DynoImporter extends DynoLoader
         return $nsMapArr;
     }
     
-    public function unpackXPath($xpath): ?array {
-        $unArr = $this->pasreNsMapStr($xpath);
-        if (!$unArr) {
-            return null;
-        }
-        $fullTargetPath = AutoLoader::getPathPrefix($unArr['targetUnpackDir']);
-        if (!$fullTargetPath) {
-            return null;
-        }
-        $fullTargetPath = \strtr($fullTargetPath, '\\', '/');
-        $oneFileMode = (\substr($fullTargetPath, -4) === '.php');
-        if ($oneFileMode) {
-            $fullTargetPath = \dirname($fullTargetPath) . '/';
-        }
-        if (!$fullTargetPath || (\substr($fullTargetPath, -1) !== '/')) {
-            return null;
-        }
-        $unArr['fullTargetPath'] = $fullTargetPath;
-        $unArr['replaceNameSpace'] = \strtr($unArr['replaceNameSpace'], '\\', '/');
-        $unArr['checkFile'] = $fullTargetPath . $unArr['checkFilesStr'];
-        return $unArr;
-    }
-        
     public function scanLoadLocalNSMaps(string $prefixChar = '@'): array {
         $searchInDir = AutoLoader::getPathPrefix($prefixChar);
         if (!$searchInDir) {
@@ -509,7 +486,7 @@ class DynoImporter extends DynoLoader
             $dataStr = \file_get_contents($fullFileName);
             $i = \strpos($dataStr, $findStr);
             if (false !== $i) {
-                $chkResult = substr($dataStr, $i + \strlen($findStr), $getLen);
+                $chkResult = \substr($dataStr, $i + \strlen($findStr), $getLen);
                 if ((\strlen($chkResult) === $getLen) && \ctype_xdigit($chkResult)) {
                     $result = $chkResult;
                 }
