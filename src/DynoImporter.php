@@ -174,6 +174,7 @@ class DynoImporter extends DynoLoader
     }
     
     public function loadNSMapFile(): ?array {
+        $nsMapArr = null;
         if (self::$dynoNSmapFile && \is_file(self::$dynoNSmapFile)) {
             if (self::$useHELMLforNSmap) {
                 $dataStr = \file_get_contents(self::$dynoNSmapFile);
@@ -181,11 +182,8 @@ class DynoImporter extends DynoLoader
             } else {
                 $nsMapArr = (require self::$dynoNSmapFile);
             }
-            if (\is_array($nsMapArr)) {
-                return $nsMapArr;
-            }
         }
-        return null;
+        return \is_array($nsMapArr) ? $nsMapArr : null;
     }
     public function saveNSMapFile(string $nsMapFile, array $nsMapArr) {
         if (self::$useHELMLforNSmap) {
