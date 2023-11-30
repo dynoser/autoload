@@ -221,8 +221,14 @@ class DynoLoader
         return \compact('nsMapArr', 'specArr');
     }
     
-    public function checkCreateDynoDir(string $vendorDir): string {
+    public function checkCreateDynoDir(string $vendorDir = null): string {
         if (!self::$dynoDir) {
+            if (!$vendorDir) {
+                $vendorDir = self::$vendorDir;
+                if (!$vendorDir) {
+                    throw new \Exception("undefined VendorDir");
+                }
+            }
             $chkDir = \dirname(DYNO_FILE);
             if (!\is_dir($chkDir)) {
                 if (\is_dir($vendorDir) && !\mkdir($chkDir, 0777, true)) {
