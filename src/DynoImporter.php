@@ -452,16 +452,18 @@ class DynoImporter extends DynoLoader
         }
 
         // import dyno-aliases
-        foreach($specArrArr['dyno-aliases'] as $currPkg => $aliasesArr) {
-            if (\is_string($aliasesArr)) {
-                $aliasesArr = [$aliasesArr];
-            }
-            if (\is_array($aliasesArr)) {
-                foreach($aliasesArr as $toClassName => $fromClassName) {
-                    if (\is_string($fromClassName)) {
-                        $toClassName = \trim(\strtr($toClassName, '/', '\\'), ' \\');
-                        if (empty($nsMapArr[$toClassName])) {// do not overwrite
-                            $nsMapArr[$toClassName] = '?' . \strtr($fromClassName, '/', '\\');
+        if (!empty($specArrArr['dyno-aliases'])) {
+            foreach($specArrArr['dyno-aliases'] as $currPkg => $aliasesArr) {
+                if (\is_string($aliasesArr)) {
+                    $aliasesArr = [$aliasesArr];
+                }
+                if (\is_array($aliasesArr)) {
+                    foreach($aliasesArr as $toClassName => $fromClassName) {
+                        if (\is_string($fromClassName)) {
+                            $toClassName = \trim(\strtr($toClassName, '/', '\\'), ' \\');
+                            if (empty($nsMapArr[$toClassName])) {// do not overwrite
+                                $nsMapArr[$toClassName] = '?' . \strtr($fromClassName, '/', '\\');
+                            }
                         }
                     }
                 }
