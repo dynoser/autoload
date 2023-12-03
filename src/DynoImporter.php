@@ -146,6 +146,20 @@ class DynoImporter extends DynoLoader
         return \compact('nsMapArr', 'specArrArr');
     }
     
+    public function isComposerLockEqual() {
+        $result = false;
+        if (DYNO_FILE && \file_exists(DYNO_FILE)) {
+            if (empty(AutoLoadSetup::$dynoArr[self::COMPOSER_LOCK_HASH])) {
+                AutoLoadSetup::$dynoArr = (require DYNO_FILE);
+            }
+            $oldComposerLockHash = AutoLoadSetup::$dynoArr[self::COMPOSER_LOCK_HASH] ?? null;
+            if ($oldComposerLockHash && (self::getComposerLockHash() === $oldComposerLockHash)) {
+                $result = true;
+            }
+        }
+        return $result;
+    }
+    
     public function updateFromComposer(bool $alwaysUpdate) {
         if (DYNO_FILE) {
             $changed = true;
@@ -362,14 +376,18 @@ class DynoImporter extends DynoLoader
         return $specArrArr;
     }
 
-    public function loadComposerNameSpaces(string $vendorDir): ?array {
+    public function loadComposerNameSpaces(string $vendorDirIn): ?array {
         $nsMapArr = [];
         $specArrArr = [];
 
         // try import namespaces from this file:
-        $composersPSR4file = $vendorDir . '/composer/autoload_psr4.php';
+        $composersPSR4file = $vendorDirIn . '/composer/autoload_psr4.php';
         if (\is_file($composersPSR4file)) {
             $composerPSR4arr = (require $composersPSR4file);
+            $vendorDir = \rtrim(\strtr($vendorDir, '\\', '/'), '/');
+            if ($vendorDir !== $vendorDirIn) {
+                throw new \Exception("Vendor Dir is different: $vendorDir != $vendorDirIn  , file=$composersPSR4file");
+            }
             if (\is_array($composerPSR4arr)) {
                 foreach($composerPSR4arr as $nameSpace => $srcFoldersArr) {
                     foreach($srcFoldersArr as $n => $path) {
@@ -387,9 +405,10 @@ class DynoImporter extends DynoLoader
                 }
             }
         }
+        $vlen = \strlen($vendorDirIn);
 
         // check composer autoload_files
-        $composerFilesFile = $vendorDir . '/composer/autoload_files.php';
+        $composerFilesFile = $vendorDirIn . '/composer/autoload_files.php';
         if (\is_file($composerFilesFile)) {
             $composerAutoLoadFilesArr = (include $composerFilesFile);
             if (\is_array($composerAutoLoadFilesArr) && $composerAutoLoadFilesArr) {
@@ -402,7 +421,8 @@ class DynoImporter extends DynoLoader
         }
 
         // walk all vendor/*/composer.json files
-        $allVendorComposerJSONFilesArr = self::getSubSubDirFilesArr($vendorDir, '/composer.json', true, false);        
+        $forwardToComposer = [];
+        $allVendorComposerJSONFilesArr = self::getSubSubDirFilesArr($vendorDirIn, '/composer.json', true, false);        
         foreach($allVendorComposerJSONFilesArr as $pkgName => $composerFullFile) {
             $JsonDataStr = \file_get_contents($composerFullFile);
             if (!$JsonDataStr) {
@@ -422,7 +442,7 @@ class DynoImporter extends DynoLoader
                         if (\substr($nsKey, -1) === '/') {
                             $nsKey = \substr($nsKey, 0, -1);
                             if (!\array_key_exists($nsKey, $nsMapArr)) {
-                                $chkPath = $vendorDir . '/'. \trim(\strtr($inVendorPath, '\\','/'), '/ ');
+                                $chkPath = $vendorDirIn . '/'. \trim(\strtr($inVendorPath, '\\','/'), '/ ');
                                 if (\is_dir($chkPath)) {
                                     $nsMapArr[$nsKey] = '*' . $chkPath . '/*';
                                 }
@@ -437,7 +457,7 @@ class DynoImporter extends DynoLoader
                     $nsKey = \trim($nsKey, '/ ');
                     if (isset($nsMapArr[$nsKey])) {
                         // remove this namespace from our autoloader, let composer's autoloader load this namespace
-                        unset($nsMapArr[$nsKey]);
+                        $forwardToComposer[$nsKey] = \strlen($nsKey);
                     }
                 }
             }
@@ -450,6 +470,82 @@ class DynoImporter extends DynoLoader
                 }
             }
         }
+        
+        // classMap analyze
+        $composerClassMapFile = $vendorDirIn . '/composer/autoload_classmap.php';
+        if (\is_file($composerClassMapFile)) {
+            $composerClassMapArr = (include $composerClassMapFile);
+            if (\is_array($composerClassMapArr) && $composerClassMapArr) {
+                //prepare array: get only vendorDir-classes, convert classnames to /-slashed, skip forwardToComposer
+                $compMapArr = [];
+                foreach($composerClassMapArr as $classFullName => $fileFullPath) {
+                    $comparePath = \strtr(\substr($fileFullPath, 0, $vlen), '\\', '/');
+                    if ($comparePath === $vendorDirIn) {
+                        $newNs = \strtr($classFullName, '\\', '/');
+                        $forward = false;
+                        foreach($forwardToComposer as $nsKey => $nslen) {
+                            if (\substr($newNs, 0, $nslen) === $nsKey) {
+                                $forward = true;
+                                break;
+                            }
+                        }
+                        if (!$forward) {
+                            $compMapArr[$newNs] = '@' . \substr($fileFullPath, $vlen);
+                        }
+                    }
+                }
+                
+                // convert nsMapArr pathes to prefixed and walk all
+                self::convertAbsPathesToPrefixed($nsMapArr, true);
+                // remove known namespaces from composerClassMap
+                foreach($nsMapArr as $nameSpace => $pathArr) {
+                    if (\strpos($nameSpace, '\\')) {
+                        // skip direct-class definition
+                        continue;
+                    }
+                    $scanNs = $nameSpace . '/';
+                    $lns = strlen($scanNs);
+                    if (\is_string($pathArr)) {
+                        $pathArr = [$pathArr];
+                    }
+                    foreach($pathArr as $pathStr) {
+                        if (!\is_string($pathStr) || \substr($pathStr, 0, 1) !== '@') {
+                            continue;
+                        }
+                        foreach($compMapArr as $classFullName => $prefixedPath) {
+                            if (\substr($classFullName, 0, $lns) === $scanNs) {
+                                $addPath = \substr($classFullName, $lns);
+                                if (\substr($pathStr, -1) === '*') {
+                                    $pathStr = substr($pathStr, 0, -1);
+                                }
+                                if (\substr($pathStr, -1) === '/') {
+                                    $expectedPath = $pathStr . $addPath . '.php';
+                                    if ($expectedPath === $prefixedPath) {
+                                        unset($compMapArr[$classFullName]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // transfer compMapArr to nsMapArr
+                foreach($compMapArr as $classFullName => $prefixedPath) {
+                    $classFullName = \strtr($classFullName, '/', '\\');
+                    if (empty($nsMapArr[$classFullName])) {
+                        $nsMapArr[$classFullName] = $prefixedPath;
+                    }
+                }
+                
+                // make composer-autoload-files key
+                foreach($composerAutoLoadFilesArr as $key => $file) {
+                     $composerAutoLoadFilesArr[$key] = \strtr($file, '\\', '/');
+                }
+                self::convertAbsPathesToPrefixed($composerAutoLoadFilesArr, false);
+                $specArrArr['composer-autoload-files'] = \array_values($composerAutoLoadFilesArr);
+            }
+        }
+        
 
         // import dyno-aliases
         if (!empty($specArrArr['dyno-aliases'])) {
@@ -469,6 +565,12 @@ class DynoImporter extends DynoLoader
                 }
             }
         }
+        
+        // remove forwardToComposer namespaces from nsMapArr
+        foreach($forwardToComposer as $nameSpace => $v) {
+            unset($nsMapArr[$nameSpace]);
+        }
+        
         return \compact('nsMapArr', 'specArrArr');
     }
     
