@@ -19,6 +19,8 @@ class DynoLoader
     public const REMOTE_NSMAP_USED = 'remote-nsmap-loaded';
 
     public static bool $forceDownloads = false;
+    
+    public static $dynoImporterObj = null;
 
     public function __construct(string $vendorDir) {
         if (! DYNO_FILE || !$vendorDir) {
@@ -48,6 +50,10 @@ class DynoLoader
                     include_once $chkFile;
                 }
             }
+        }
+        
+        if (!$needUpdateDynoFile && !empty($_GET['dynocheckchanges']) && !$this->makeDynoImporterObj()->isComposerLockEqual()) {
+            $needUpdateDynoFile = true;
         }
 
         if (\class_exists($classHELML)) {
@@ -109,23 +115,19 @@ class DynoLoader
     }
     
     public function makeDynoImporterObj() {
-        if (!\class_exists('dynoser\\autoload\\DynoImporter', false)) {
-            $chkFile = __DIR__ . '/DynoImporter.php';
-            if (\is_file($chkFile)) {
-                include_once $chkFile;
+        if (!self::$dynoImporterObj) {
+            if (!\class_exists('dynoser\\autoload\\DynoImporter', false)) {
+                $chkFile = __DIR__ . '/DynoImporter.php';
+                if (\is_file($chkFile)) {
+                    include_once $chkFile;
+                }
+            }
+            if (\class_exists('dynoser\\autoload\\DynoImporter')) {
+                $this->checkCreateDynoDir(self::$vendorDir);
+                self::$dynoImporterObj = new DynoImporter('');
             }
         }
-        if (\class_exists('dynoser\\autoload\\DynoImporter')) {
-            $this->checkCreateDynoDir(self::$vendorDir);
-            $dynoImporterObj = new DynoImporter('');
-//        Uncomment to use non-static object-properties
-//        foreach($this as $k => $v) {
-//            $dynoImporterObj->$k = $v;
-//        }
-        } else {
-            $dynoImporterObj = null;
-        }
-        return $dynoImporterObj;
+        return self::$dynoImporterObj;
     }
     
     public function quickPrepareDynoArr($vendorDir) {
