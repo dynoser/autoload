@@ -104,12 +104,12 @@ class AutoLoadSetup
                 // check sodium (required for HashSig)
                 if (!\function_exists('sodium_crypto_sign_verify_detached')) {
                     // try sodium polyfill
-                    $chkFile = $vendorDir . '/paragonie/sodium_compat/autoload.php';
+                    $chkFile = self::$vendorDir . '/paragonie/sodium_compat/autoload.php';
                     if (\is_file($chkFile)) {
                         require_once $chkFile;
                     }
                 }
-                self::$dynoObj = new $classDynoLoader($vendorDir);
+                self::$dynoObj = new $classDynoLoader(self::$vendorDir);
                 if (\defined('DYNO_WRITELOG') && \class_exists('\\dynoser\\writelog\\WriteLog')) {
                     self::$dynoObj->writeLogObj = new \dynoser\writelog\WriteLog(self::$dynoObj->dynoDir, \constant('DYNO_WRITELOG'));
                 }
