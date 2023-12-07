@@ -278,7 +278,7 @@ class DynoImporter extends DynoLoader
         }
     }
 
-    public function saveDynoFile(string $dynoFile): bool {
+    public function saveDynoFile(string $dynoFile, bool $thrEx = true): bool {
         // get current dynoArr
         $dynoArr = AutoLoadSetup::$dynoArr;
         self::convertAbsPathesToPrefixed($dynoArr, true);        
@@ -292,8 +292,12 @@ class DynoImporter extends DynoLoader
         $dynoArr[AutoLoadSetup::BASE_DIRS_KEY] = $baseDirArr;
 
         $dynoStr = '<' . "?php\n" . 'return ' . \var_export($dynoArr, true) . ";\n";
-        $wb = \file_put_contents($dynoFile, $dynoStr);
-        return $wb ? true: false;
+        $oldDynoStr = \is_file($dynoFile) ? \file_get_contents($dynoFile) : '';
+        $wb = ($oldDynoStr === $dynoStr) ? \strlen($dynoStr) : \file_put_contents($dynoFile, $dynoStr);
+        if (!$wb && $thrEx) {
+            throw new \Exception("Can't write file: $dynoFile\n");
+        }
+        return !empty($wb);
     }
 
 
