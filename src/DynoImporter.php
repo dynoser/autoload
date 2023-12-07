@@ -463,7 +463,7 @@ class DynoImporter extends DynoLoader
             }
             if (!empty($JsonDataArr['extra']) && \is_array($JsonDataArr['extra'])) {
                 $extraArr = $JsonDataArr['extra'];
-                foreach(['dyno-aliases'] as $key) {
+                foreach(['dyno-aliases', 'dyno-nsmap'] as $key) {
                     if (\array_key_exists($key, $extraArr)) {
                         $specArrArr[$key][$pkgName] = $extraArr[$key];
                     }
@@ -570,7 +570,22 @@ class DynoImporter extends DynoLoader
         foreach($forwardToComposer as $nameSpace => $v) {
             unset($nsMapArr[$nameSpace]);
         }
-        
+
+        // import dyno-nsmap
+        if (!empty($specArrArr['dyno-nsmap'])) {
+            foreach($specArrArr['dyno-nsmap'] as $currPkg => $nsAddArr) {
+                if (\is_string($nsAddArr)) {
+                    $nsAddArr = [$nsAddArr];
+                }
+                if (\is_array($nsAddArr)) {
+                    foreach($nsAddArr as $nameSpace => $xpath) {
+                        if (empty($nsMapArr[$nameSpace])) {// do not overwrite
+                            $nsMapArr[$nameSpace] = $xpath;
+                        }
+                    }
+                }
+            }
+        }
         return \compact('nsMapArr', 'specArrArr');
     }
     
