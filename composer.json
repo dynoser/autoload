@@ -2,7 +2,7 @@
     "name": "dynoser/autoload",
     "description": "Smart autoloader php-classes",
     "type": "library",
-    "version": "1.0.5",
+    "version": "1.0.6 ",
     "autoload": {
         "psr-4": {
             "dynoser\\autoload\\": "src/"
