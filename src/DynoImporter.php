@@ -41,8 +41,11 @@ class DynoImporter extends DynoLoader
             $locNsSpecArr = $this->addNameSpacesFromLocalNSMaps();
             
             foreach($locNsSpecArr as $k => $v) {
+                if (!\is_array($v)) {
+                    $v = [$v];
+                }
                 if (\array_key_exists($k, $specArrArr)) {
-                    $specArrArr[$k] += $v;
+                    $specArrArr[$k] = \array_merge($specArrArr[$k], $v);
                 } else {
                     $specArrArr[$k] = $v;
                 }
@@ -61,7 +64,7 @@ class DynoImporter extends DynoLoader
                     foreach($nsMapArr as $nameSpace => $xpath) {
                         if (empty(AutoLoadSetup::$dynoArr[$nameSpace])) {
                             // if pkg exist then change path from remote to local
-                            if (substr($xpath, 0, 1) === ':') {
+                            if (\substr($xpath, 0, 1) === ':') {
                                 $unArr = $this->unpackXPath($xpath);
                                 if (!$unArr) {
                                     continue;
@@ -159,7 +162,7 @@ class DynoImporter extends DynoLoader
         }
         return $result;
     }
-    
+
     public function updateFromComposer(bool $alwaysUpdate) {
         if (DYNO_FILE) {
             $changed = true;
@@ -364,18 +367,28 @@ class DynoImporter extends DynoLoader
         $dynoArr = & AutoLoadSetup::$dynoArr;
         assert(\is_array($dynoArr));
 
-        $dlMapArr = $this->scanLoadLocalNSMaps('@');
-        if (\is_array($dlMapArr)) {
-            $specArrArr = $dlMapArr['specArrArr'];
-            $nsMapArr = $dlMapArr['nsMapArr'];
-            self::convertAbsPathesToPrefixed($nsMapArr, true);
-            foreach($nsMapArr as $nameSpace => $srcFolders) {
-                if (!\array_key_exists($nameSpace, $dynoArr) || $dynoArr[$nameSpace] !== $srcFolders) {
-                    $dynoArr[$nameSpace] = $srcFolders;
+        $specArrArr = [];
+        foreach(['@', '+'] as $prefix) {
+            $dlMapArr = $this->scanLoadLocalNSMaps($prefix);
+            if (\is_array($dlMapArr)) {
+                foreach($dlMapArr['specArrArr'] as $k => $v) {
+                    if (!\is_array($v)) {
+                        $v = [$v];
+                    }
+                    if (\array_key_exists($k, $specArrArr)) {
+                        $specArrArr[$k] = \array_merge($specArrArr[$k], $v);
+                    } else {
+                        $specArrArr[$k] = $v;
+                    }
+                }
+                $nsMapArr = $dlMapArr['nsMapArr'];
+                self::convertAbsPathesToPrefixed($nsMapArr, true);
+                foreach($nsMapArr as $nameSpace => $srcFolders) {
+                    if (!\array_key_exists($nameSpace, $dynoArr) || $dynoArr[$nameSpace] !== $srcFolders) {
+                        $dynoArr[$nameSpace] = $srcFolders;
+                    }
                 }
             }
-        } else {
-            $specArrArr = null;
         }
         return $specArrArr;
     }
