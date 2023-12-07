@@ -218,7 +218,7 @@ class AutoLoader
     }
     
     public static function classExists($classFullName, $canAutoLoad = true, $canAutoInstall = false, $realyLoad = true) {
-        $xClass = \strtr($classFullName, '/', '\\');
+        $xClass = \trim(\strtr($classFullName, '/', '\\'), '\\');
         $result = \class_exists($xClass, false);
         if (!$result) {
             $storAutoIns = self::$enableRemoteInstall;
