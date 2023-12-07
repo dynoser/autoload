@@ -52,8 +52,18 @@ class DynoLoader
             }
         }
         
-        if (!$needUpdateDynoFile && !empty($_GET['dynocheckchanges']) && !$this->makeDynoImporterObj()->isComposerLockEqual()) {
-            $needUpdateDynoFile = true;
+        if (!$needUpdateDynoFile && isset($_GET['dynochangescheck'])) {
+            switch($_GET['dynochangescheck']) {
+                case 1:
+                    $needUpdateDynoFile = !$this->makeDynoImporterObj()->isComposerLockEqual();
+                    break;
+                case 3:
+                    AutoLoadSetup::$dynoArr = [];
+                case 2:
+                    \is_file(DYNO_FILE) && \unlink(DYNO_FILE);
+                case 0:
+                    $needUpdateDynoFile = true;
+            }
         }
 
         if (\class_exists($classHELML)) {
@@ -311,15 +321,9 @@ class DynoLoader
             $replaceNameSpace = $unArr['replaceNameSpace'];
             $fullTargetPath = $unArr['fullTargetPath'];
             $checkFile = $unArr['checkFile'];
-
-//            $lk = \strlen($nameSpaceKey);
-//            $addPath = \substr($classFullName, $lk, \strlen($classFullName) - $lk);
-//            $addPath = $addPath ? \strtr(\substr($addPath, 1), '\\', '/') : \basename($classFullName);
-//            $pkgChkFile = $addPath . '.php';
-
             if ((!\is_file($checkFile) || self::$forceDownloads) && AutoLoader::$enableRemoteInstall) {
                 // File not found - try load and install
-                if (!\is_dir($fullTargetPath) && !mkdir($fullTargetPath, 0777, true)) {
+                if (!\is_dir($fullTargetPath) && !\mkdir($fullTargetPath, 0777, true)) {
                     throw new \Exception("Can't create target path for download package: $fullTargetPath , foor class=$classFullName");
                 }
                 if (AutoLoader::$commiterObj) {
