@@ -90,7 +90,7 @@ class DynoImporter extends DynoLoader
             $this->saveDynoFile(DYNO_FILE);
 
             if (self::$dynoNSmapFile) {
-                // add specArrArr ti nsMapArr
+                // add specArrArr to nsMapArr
                 foreach($specArrArr as $k => $v) {
                     if (!\is_array($v)) {
                         $v = [$v];
