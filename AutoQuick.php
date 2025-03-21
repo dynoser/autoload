@@ -143,6 +143,19 @@ class AutoQuick {
         return \class_exists($classFullName, false) ? $filePathString : '';
     }
     
+    public static function addClass(string $nameSpaceSrc, string $classFilePath, bool $toRealPath = true): void {
+        $nameSpace =\trim(\strtr($nameSpaceSrc, '/', '\\'), "/\\ \n\r\v\t");
+        $linkedPath = $toRealPath ? \realpath($classFilePath) : $classFilePath;
+        if (!$linkedPath) {
+            throw new \Exception("Class $nameSpace file not found: $classFilePath");
+        }
+        self::$classesArr[$nameSpace] = $linkedPath;
+    }
+
+    public static function addNS(string $nameSpaceSrc, string $linkedPath = '~/*', bool $ifNotExist = true): bool {
+        return self::addNameSpaceBase(\strtr($nameSpaceSrc, '\\', '/'), $linkedPath, $ifNotExist);
+    }
+    
     public static function addNameSpaceBase(string $nameSpaceSrc, string $linkedPath = '~/*', bool $ifNotExist = true): bool {
         if (self::$needInit) {
             new AutoQuick();
