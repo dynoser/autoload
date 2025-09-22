@@ -3,56 +3,46 @@ declare(strict_types=1);
 /**
  * Это одно-файловый быстрый загрузчик, не имеющий никаких зависимостей.
  * Достаточно включить этот файл в проект при помощи require_once из любого места.
- * Откуда грузить файлы для какого пространства имён можно задавать либо при помощи
- *  \AutoQuick::addNameSpaceBase('пространсто имен', 'шаблон имени файла')
- * либо добавляя элементы напрямую в массив \AutoQuick::$classesArr[fullClassName] = filePath
- * Обратим внимание:
- *  чтобы указать прямое соответствие полного имени класса и имени файла,
- *   в ключе должны быть разделителлями обратные слэши, т.е. точно так же как в namespace
- *   иными словами, при указании полного имени класса требуется точное соответствие каждого символа имени.
- *  если же хотим указать левую часть пространства имён, к которой будут "пристыковываться" более длинные имена
- *   то тогда в ключе должны быть разделителями прямые слэши '/', т.е. не как в namespace.
- *   поиск ключей для пространств имён ведётся от более длинных к более коротким, т.е. справа налево.
+ * Откуда грузить файлы классов задаётся в массиве \AutoQuick::$classesArr
+ * Простейший метод запуска:
+ *  require_once 'AutoQuick.php'; // подключаем файл и вызываем 
+ *  new \AutoQuick([... соответствия ...], __DIR__);
  * 
- * Шаблоны имени файла имеют следующую структуру:
- *  1. первый символ (слева) - специальный, может заменяться на путь, указанный в $classesBaseDirArr
- *   Предустановленные первые символы:
- *   '*' - указание абсолютного пути (символ заменяется на пустую строку), далее может быть указан любой путь
- *   '~' - корневой путь папки классов, может быть предустановлен в константе CLASSES_DIR
- *   '?' - зарезервирован для создания алиасов классов
- *  Если первый символ не определен в массиве $classesBaseDirArr он ни на что не заменяется и остаётся как есть.
- *
- *  2. Все остальные символы шаблона, кроме двух специальных '*' и '?' трактуются такими как есть.
- *   '?' - заменяется на короткое имя класса (крайне правая часть, без остального namespace)
- *   '*' - заменяется на то, что левее короткого имени класса, но правее текущего ключа пространства имён
- *  3. Не боимся добавлять лишние слэши на стыках, они будут преобразованы к одному слешу.
- *
- *  По умолчанию, если никакие namespace не добавлены:
- *   шаблон имени файла класса будет соответствовать полному namespace + .php
- *   считая от той папки, которая будет определена как '~' (то есть CLASSES_DIR).
+ * Подробнее см. AutoQuick.md
  */
 
 class AutoQuick {
-    public static bool $needInit = true;
 
     // [namespace] => pattern
-    public static $classesArr = [
-        '' => '~/*/?' // шаблон загрузки для "всех остальных" классов
-    ];
+    public static $classesArr = [];
+
+    public static string $lang_cur = 'ru'; // на что будет заменен знак # в первую очередь
+    public static string $lang_def = 'en'; // на что будет заменен знак # если не найдется файла по первой замене.
 
     // directory prefixes [PrefixChar] => left part of path
     public static $classesBaseDirArr = [
         '*' => '', // Зарезервирован для указания абсолютных путей
-        '?' => '' // Зарезервирован для присвоения алиасов
+        '?' => '', // Зарезервирован для присвоения алиасов
+        '&' => '', // Зарезервирован для вызова функций по имени
     ];
-    
-    public function __construct(string $nameSpace = '', string $file = '') {
-        self::$needInit = false;
 
-        self::$classesBaseDirArr['~'] = self::scanClassesDir($file);
+    /**
+     * Constructor for AutoQuick class
+     * 
+     * @param array $classesArr Array of class mappings
+     * @param string $file File path for directory detection
+     */
+    public function __construct(array $classesArr = [], string $fileORdir = '') {
+        if (!isset($classesArr[''])) {
+             // пустой ключ обязателен, это шаблон для "всех остальных" классов
+            $classesArr[''] = '~/?/?';
+        }
+        self::$classesArr = $classesArr;
 
-        if ($nameSpace) {
-            self::addNameSpaceBase($nameSpace);
+        // корневая директория классов по умолчанию, лучше задать в CLASSES_DIR
+        $classesDir = self::scanClassesDir($fileORdir);
+        if ($classesDir) {
+            self::$classesBaseDirArr['~'] = $classesDir;
         }
     }
 
@@ -60,14 +50,9 @@ class AutoQuick {
      * This function is registered with 'spl_autoload_register'
      */
     public static function autoLoadSpl(string $classFullName): void {
-        if (self::$needInit) {
-            new \AutoQuick();
-        }
-        $fullFileName = self::autoLoad($classFullName);
-
-        // Class may contain the static method __onLoad to initialize on load, check it
-        if ($fullFileName && \class_exists($classFullName, false) && \method_exists($classFullName, '__onLoad')) {
-            $classFullName::__onLoad();
+        if (self::$classesArr) {
+            // если определен массив соответствий, тогда работаем.
+            self::autoLoad($classFullName);
         }
     }
 
@@ -75,165 +60,132 @@ class AutoQuick {
      * The function looks for matching files for the specified class name and either loads them or checks for their existence.
      * 
      * @param string $classFullName
-     * @param bool $realyLoad false = return FileName only, true = realy load
+     * @param bool $reallyLoad false = return FileName only, true = really load
      * @return string
      */
-    public static function autoLoad($classFullName, $realyLoad = true): string
+    public static function autoLoad(string $classFullName, bool $reallyLoad = true): string
     {
         // Let's divide $classFullName to $nameSpaceDir and $classShortName
         // $nameSpaceDir is namespace with "/" dividers instead "\"
-        $i = \strrpos($classFullName, '\\');
-        $classShortName = $i ? \substr($classFullName, $i + 1) : $classFullName;
-        $nameSpaceDir = $i ? \substr(strtr($classFullName, '\\', '/'), 0, $i) : '';
-
+        $bs = '\\';
+        $i = strrpos($classFullName, $bs);
+        if (false ===$i) {
+            $classFullName = $bs . $classFullName;
+            $i = 0;
+        }
+        $classShortName = $i ? substr($classFullName, $i + 1) : substr($classFullName, 1);
+        $nameSpaceDir = $i ? substr(strtr($classFullName, $bs, '/'), 0, $i) : '/';
+        
         // Try to find class in array
         if (isset(self::$classesArr[$classFullName])) {
             $nameSpaceKey = $classFullName;
         } else {
-            // Search first defined namespace in $classesArr (from end to root)
+            // Search longest namespace key in $classesArr (from end to root)
             $nameSpaceKey = $nameSpaceDir;
             while ($i && empty(self::$classesArr[$nameSpaceKey])) {
-                $i = \strrpos($nameSpaceKey, '/');
+                $i = strrpos($nameSpaceKey, '/');
                 $nameSpaceKey = $i ? substr($nameSpaceKey, 0, $i) : '';
             }
-            if (empty(self::$classesArr[$nameSpaceKey])) {
-                // Class or namespace is not defined
+            // проверка существования итогового ключа пространства имён
+            if (!isset(self::$classesArr[$nameSpaceKey])) {
+                // Undefined namespace
                 return '';
             }
         }
-        $starPath = $i ? \substr($nameSpaceDir, $i) : $nameSpaceDir;
+        $starPath = $i ? substr($nameSpaceDir, $i) : $nameSpaceDir;
 
         $setAliasFrom = '';
 
         $filePathString = self::$classesArr[$nameSpaceKey];
 
-        $firstChar = \substr($filePathString, 0, 1);
-        if (\array_key_exists($firstChar, self::$classesBaseDirArr)) {
-            $filePathString = self::$classesBaseDirArr[$firstChar] . \substr($filePathString, 1);
-            if ('?' === $firstChar) {
-                // alias
-                $setAliasFrom = \strtr($filePathString, '/', '\\');
-                // если класс, из которого устанавливается алиас, не определён, то определяем имя исходного файла рекурсивно
-                $filePathString = \class_exists($setAliasFrom, false) ? '' : self::autoLoad(\strtr($filePathString, '/', '\\'), false);
-            } else {
+        $firstChar = substr($filePathString, 0, 1);
+        if (array_key_exists($firstChar, self::$classesBaseDirArr)) {
+            $filePathString = self::$classesBaseDirArr[$firstChar] . substr($filePathString, 1);
+            switch ($firstChar) {
+            case '?':
+                // если указан alias
+                $setAliasFrom = strtr($filePathString, '/', $bs);
+                // если класс, из которого устанавливается алиас, не определен, то определяем имя его файла рекурсивно
+                $filePathString = class_exists($setAliasFrom, false) ? '' : self::autoLoad(strtr($filePathString, '/', $bs), false);
+                break;
+            case '&':
+                // если указан вызов функции
+                $i = strpos($filePathString, '&');
+                $funcName = $i ? substr($filePathString, 0, $i) : $filePathString;
+                $filePathString = $i ? substr($filePathString, $i + 1) : '';
+                $filePathString = call_user_func($funcName, compact(
+                    'filePathString',
+                    'classFullName',
+                    'starPath',
+                    'classShortName',
+                    'nameSpaceDir',
+                    'nameSpaceKey'
+                ));
+                break;
+            default:
                 // алгоритмы преобразования пути:
                 // 1. '*' заменяем на $starPath
                 // 2. '?' заменяем на $classShortName
-                $filePathString = \str_replace(['*', '?'], [$starPath, $classShortName], $filePathString);
+                $filePathString = str_replace(['*', '?'], [$starPath, $classShortName], $filePathString);
                 
-                if (\substr($filePathString, -4) !== '.php') {
+                // 3. добавляем .php если его нет
+                if (substr($filePathString, -4) !== '.php') {
                     $filePathString .= '.php';
                 }
             }
-            // Удалим двойные слэши везде, кроме самого начала строки
-            while($i = \strrpos($filePathString, '//')) {
-               $filePathString = \substr($filePathString, 0, $i) . \substr($filePathString, $i + 1); 
+        }
+
+        // обработка # как vari_*
+        $i = strpos($filePathString, '#');
+        if ($i) {
+            $fileVariCur = substr($filePathString, 0, $i) . self::$lang_cur . substr($filePathString, $i + 1);
+            if (is_file($fileVariCur)) {
+                $filePathString = $fileVariCur;
+            } else {
+                $filePathString = substr($filePathString, 0, $i) . self::$lang_def . substr($filePathString, $i + 1);
             }
         }
 
-        if (!$realyLoad) {
+        // пост-обработка: удалим двойные слэши везде, кроме начала строки
+        // двойные слэши в начале строки важны для сетевых путей Windows
+        while($i = strrpos($filePathString, '//')) {
+            $filePathString = substr($filePathString, 0, $i) . substr($filePathString, $i + 1); 
+        }
+
+        if (!$reallyLoad) {
             return $filePathString;
         }
-        if ($filePathString && \is_file($filePathString)) {
+        if ($filePathString && is_file($filePathString)) {
             include_once $filePathString;
         }
-        if ($setAliasFrom && !\class_exists($classFullName, false) && \class_exists($setAliasFrom, false)) {
-            \class_alias($setAliasFrom, $classFullName);
+        if ($setAliasFrom && !class_exists($classFullName, false) && class_exists($setAliasFrom, false)) {
+            class_alias($setAliasFrom, $classFullName);
         }
-        return \class_exists($classFullName, false) ? $filePathString : '';
-    }
-    
-    public static function addClass(string $nameSpaceSrc, string $classFilePath, bool $toRealPath = true): void {
-        $nameSpace =\trim(\strtr($nameSpaceSrc, '/', '\\'), "/\\ \n\r\v\t");
-        $linkedPath = $toRealPath ? \realpath($classFilePath) : $classFilePath;
-        if (!$linkedPath) {
-            throw new \Exception("Class $nameSpace file not found: $classFilePath");
-        }
-        self::$classesArr[$nameSpace] = $linkedPath;
+        return class_exists($classFullName, false) ? $filePathString : '';
     }
 
-    public static function addNS(string $nameSpaceSrc, string $linkedPath = '~/*', bool $ifNotExist = true): bool {
-        return self::addNameSpaceBase(\strtr($nameSpaceSrc, '\\', '/'), $linkedPath, $ifNotExist);
-    }
-    
-    public static function addNameSpaceBase(string $nameSpaceSrc, string $linkedPath = '~/*', bool $ifNotExist = true): bool {
-        if (self::$needInit) {
-            new AutoQuick();
-        }
-        
-        // удаляем в начале и в конце пробельные символы и слэши
-        $nameSpace = \trim($nameSpaceSrc, "/\\ \n\r\v\t");
-        if ($ifNotExist && isset(self::$classesArr[$nameSpace])) {
-            // если уже определено и флаг включен, то не переопределяем
-            return false;
-        }
-
-        // выпрямляем слэши в пути
-        $linkedPath = \strtr($linkedPath, '\\', '/');
-        $llen = \strlen($linkedPath);
-        
-        // налиие знака ? внутри расценивается как указание детального пути и отменяет финальные модификации
-        $haveQ = (false !== \strpos($linkedPath, '?'));
-        // имелись ли спецсимволы ? или * внутри пути
-        $haveSpec = (false !== \strpos($linkedPath, '*')) || $haveQ;
-        // является ли указанный путь просто директорией
-        $isDir = !$haveSpec && \is_dir($linkedPath);
-
-        $fc = \substr($linkedPath, 0, 1); //берём первый символ пути
-        if (empty(self::$classesBaseDirArr[$fc])) {
-            //если такой символ не определён в списке, выполним поиск по символа по директории
-            foreach(self::$classesBaseDirArr as $firstChar => $leftPath) {
-                $clen = \strlen($leftPath);
-                if ($clen && $clen <= $llen && \substr($linkedPath, 0, $clen) === $leftPath) {
-                    $linkedPath = $firstChar . \substr($linkedPath, $clen);
-                    break;
-                }
-            }
-        }
-        if ($haveQ) {
-            // Удаляем удвоенные ?? и это отменяет финальные модификации
-            $linkedPath = \str_replace('??', '', $linkedPath);
-        } else {
-            // Финальные модификации
-            if ($isDir) {
-                // если на входе была директория (и без спецсимволов), добавляем
-                $linkedPath .= '/*';
-            }
-            if (\substr($linkedPath, -1) === '*') {
-                // Если в конце есть * и внутри нет ?, добавляем
-                $linkedPath .= '/?';
-            }
-        }
-        self::$classesArr[$nameSpace] = $linkedPath;
-        return true;
-    }
-
-    public static function scanClassesDir(string $file): string {
-        if (\defined('CLASSES_DIR')) {
+    public static function scanClassesDir(string $fileORdir): string {
+        if (defined('CLASSES_DIR')) {
             // Максимальный приоритет у константы.
             $classesDir = \CLASSES_DIR;
         } else {
-            // Берём за основу либо путь от указанного файла, либо текущую папку.
-            $classesDir = $file ? \dirname($file) : \getcwd();
-            // попробуем найти папку /vendor/ внутри этого пути
-            $i = \strpos(\strtr($classesDir . '/', '\\', '/'), '/vendor/');
-            if ($i) {
-                // если папка /vendor найдена, берём всё что слева от неё
-                $classesDir = \substr($classesDir, 0, $i);
-            } else {
-                // если /vendor в пути отсутствует, возьмём путь файла, из которого был вызов
-                $backtrace = \debug_backtrace(\DEBUG_BACKTRACE_IGNORE_ARGS, 5);
-                $calledFrom = \end($backtrace);
-                if (isset($calledFrom['file'])) {
-                    $classesDir = \dirname($calledFrom['file']);
-                } else {
+            if ($fileORdir) {
+                // если указан путь и это папка, то её и возьмём.
+                // иначе считаем что это файл, и возьмём папку, в которой он лежит.
+                $classesDir = realpath(is_dir($fileORdir) ? $fileORdir : dirname($fileORdir));
+                // если realpath не нашел такой путь, то выбрасываем исключение
+                if (!$classesDir) {
                     throw new \Exception("Can't auto-detect classesDir");
                 }
+            } else {
+                // если путь не указан, будем считать что этот файл лежит в папке,
+                // которая как раз и является корневой директорией классов
+                $classesDir = __DIR__;
             }
         }
         // выпрямляем слэши и удаляем слэш в конце
-        return \rtrim(\strtr($classesDir, '\\', '/'), '/');
+        return rtrim(strtr($classesDir, '\\', '/'), '/');
     }
 }
 
-\spl_autoload_register('\AutoQuick::autoLoadSpl', true, true);
+spl_autoload_register('AutoQuick::autoLoadSpl', true, true);
