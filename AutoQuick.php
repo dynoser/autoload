@@ -34,8 +34,8 @@ class AutoQuick {
      */
     public function __construct(array $classesArr = [], string $fileORdir = '') {
         if (!isset($classesArr[''])) {
-             // пустой ключ обязателен, это шаблон для "всех остальных" классов
-            $classesArr[''] = '~/?/?';
+             // пустой ключ это шаблон для "всех остальных" классов
+            $classesArr[''] = '~/^/?'; // = CLASSES_DIR / $vendor / $shortClassName .php
         }
         self::$classesArr = $classesArr;
 
@@ -126,9 +126,11 @@ class AutoQuick {
                 // алгоритмы преобразования пути:
                 // 1. '*' заменяем на $starPath
                 // 2. '?' заменяем на $classShortName
-                $filePathString = str_replace(['*', '?'], [$starPath, $classShortName], $filePathString);
+                // 3. '^' заменяем на $vendor
+                $vendor = strstr($classFullName, $bs, true);
+                $filePathString = str_replace(['*', '?', '^'], [$starPath, $classShortName, $vendor], $filePathString);
                 
-                // 3. добавляем .php если его нет
+                // 4. добавляем .php если его нет
                 if (substr($filePathString, -4) !== '.php') {
                     $filePathString .= '.php';
                 }
